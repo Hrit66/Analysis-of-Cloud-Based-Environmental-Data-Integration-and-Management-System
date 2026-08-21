@@ -4,20 +4,21 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 import numpy as np
 import pandas as pd
 
-from pipeline import clean_dataframe, parse_file
-from pipeline.cleaners.cleaner import clean_data
-from pipeline.cleaners.normalizer import STANDARDIZED_AIR_QUALITY_COLUMNS, normalize_air_quality
-from pipeline.cleaners.range_checker import check_and_filter_ranges
-from pipeline.imputation.knn_imputer import impute_knn
-from pipeline.imputation.rf_imputer import impute_rf
-from pipeline.readers.csv_reader import read_csv
-from pipeline.readers.excel_reader import read_excel
-from pipeline.readers.json_reader import read_json
-from pipeline.validators.file_validator import validate_file
-from pipeline.validators.schema_validator import validate_schema
+from pipeline import clean_dataframe, parse_file, process_file
+from pipeline.cleaners import (
+    STANDARDIZED_AIR_QUALITY_COLUMNS,
+    clean_data,
+    normalize_air_quality,
+)
+from pipeline.imputation import impute_knn, impute_rf
+from pipeline.ingestion import fetch_api_data
+from pipeline.readers import read_csv, read_excel, read_json
+from pipeline.validators import validate_file, validate_schema
+from pipeline.workers import process_batch_task, process_file_task
 
 
 class TestPipeline(unittest.TestCase):
@@ -99,14 +100,13 @@ class TestPipeline(unittest.TestCase):
         })
         cleaned = clean_data(df)
         self.assertListEqual(list(cleaned.columns), ["col1", "col2"])
-        self.assertEqual(len(cleaned), 2)  # dropped duplicate row and all-NA row
+        self.assertEqual(len(cleaned), 2)
 
     def test_clean_dataframe_air_quality_standardization(self):
-        # Raw dataset with varying column aliases and timezone offset
         raw_df = pd.DataFrame({
             "Date Time": ["2026-08-21 19:30:00+05:30", "2026-08-21 20:30:00+05:30", "2026-08-21 20:30:00+05:30"],
             "Station_Name": [" Anand Vihar ", " Anand Vihar ", " Anand Vihar "],
-            "PM2.5 (ug/m3)": ["120.5", "-5.0", "-5.0"],  # includes negative noise
+            "PM2.5 (ug/m3)": ["120.5", "-5.0", "-5.0"],
             "PM10 (ug/m3)": [210.0, 195.0, 195.0],
             "NO2 (ug/m3)": [45.1, 40.2, 40.2],
             "SO2 (ug/m3)": [15.2, 14.8, 14.8],
@@ -116,27 +116,42 @@ class TestPipeline(unittest.TestCase):
 
         cleaned = clean_dataframe(raw_df, dataset_type="air_quality")
 
-        # 1. Check exact standardized column list
         self.assertListEqual(list(cleaned.columns), STANDARDIZED_AIR_QUALITY_COLUMNS)
-
-        # 2. Check deduplication
         self.assertEqual(len(cleaned), 2)
-
-        # 3. Check UTC ISO 8601 normalization (19:30:00+05:30 -> 14:00:00Z)
         self.assertEqual(cleaned["timestamp"].iloc[0], "2026-08-21T14:00:00Z")
         self.assertEqual(cleaned["timestamp"].iloc[1], "2026-08-21T15:00:00Z")
-
-        # 4. Check negative range filtering replaced -5.0 with NaN
         self.assertTrue(np.isnan(cleaned["pm25"].iloc[1]))
         self.assertEqual(cleaned["pm25"].iloc[0], 120.5)
 
-        # 5. Check float datatypes for pollutants
         for col in ["pm25", "pm10", "no2", "so2", "co", "o3"]:
             self.assertEqual(cleaned[col].dtype, float)
 
-        # 6. Verify backend fields dataset_id / dataset_type are NOT added by pipeline
         self.assertNotIn("dataset_id", cleaned.columns)
         self.assertNotIn("dataset_type", cleaned.columns)
+
+    def test_process_file_end_to_end(self):
+        csv_file = self.temp_path / "full_pipeline.csv"
+        csv_file.write_text(
+            "time,station,pm2.5,pm10,no2,so2,co,o3\n"
+            "2026-08-21 12:00:00,Site Alpha,25.4,50.1,15.2,8.0,0.9,40.1\n"
+        )
+        res = process_file(csv_file, dataset_type="air_quality")
+        self.assertListEqual(list(res.columns), STANDARDIZED_AIR_QUALITY_COLUMNS)
+        self.assertEqual(res["location"].iloc[0], "Site Alpha")
+        self.assertEqual(res["pm25"].iloc[0], 25.4)
+
+    def test_worker_tasks(self):
+        csv_file = self.temp_path / "task_test.csv"
+        csv_file.write_text(
+            "timestamp,location,pm25,pm10,no2,so2,co,o3\n"
+            "2026-08-21 10:00:00,Delhi,30.0,60.0,20.0,10.0,1.0,25.0\n"
+        )
+        res = process_file_task(csv_file)
+        self.assertEqual(len(res), 1)
+
+        batch_res = process_batch_task([csv_file])
+        self.assertIn(str(csv_file), batch_res)
+        self.assertEqual(len(batch_res[str(csv_file)]), 1)
 
     def test_imputers(self):
         df_missing = pd.DataFrame({
@@ -148,6 +163,19 @@ class TestPipeline(unittest.TestCase):
 
         rf_res = impute_rf(df_missing)
         self.assertEqual(rf_res["a"].isna().sum(), 0)
+
+    @patch("urllib.request.urlopen")
+    def test_fetch_api_data(self, mock_urlopen):
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = json.dumps([
+            {"timestamp": "2026-08-21T00:00:00Z", "pm25": 12.0}
+        ]).encode("utf-8")
+        mock_resp.__enter__.return_value = mock_resp
+        mock_urlopen.return_value = mock_resp
+
+        df = fetch_api_data("https://api.example.com/airquality")
+        self.assertEqual(len(df), 1)
+        self.assertIn("pm25", df.columns)
 
 
 if __name__ == "__main__":

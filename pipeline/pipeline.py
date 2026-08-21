@@ -2,13 +2,9 @@ from pathlib import Path
 from typing import Optional, Union
 import pandas as pd
 
-from pipeline.cleaners.cleaner import clean_data
-from pipeline.cleaners.normalizer import normalize_air_quality
-from pipeline.cleaners.range_checker import check_and_filter_ranges
-from pipeline.readers.csv_reader import read_csv
-from pipeline.readers.excel_reader import read_excel
-from pipeline.readers.json_reader import read_json
-from pipeline.validators.file_validator import validate_file
+from pipeline.cleaners import clean_data, normalize_air_quality, check_and_filter_ranges
+from pipeline.readers import read_csv, read_excel, read_json
+from pipeline.validators import validate_file
 
 
 def parse_file(
@@ -18,7 +14,7 @@ def parse_file(
 ) -> pd.DataFrame:
     """Parse a data file into a pandas DataFrame based on file type or extension.
 
-    This is a pure function with no database, background tasks, or backend dependencies.
+    This is a pure function with no database or backend dependencies.
 
     Supported formats: CSV, JSON, Excel (.xlsx, .xls)
 
@@ -99,3 +95,24 @@ def clean_dataframe(
         raise ValueError(
             f"Unsupported dataset_type: '{dataset_type}'. Currently supported types: 'air_quality'"
         )
+
+
+def process_file(
+    file_path: Union[str, Path],
+    dataset_type: str = "air_quality",
+    file_type: Optional[str] = None,
+    **kwargs,
+) -> pd.DataFrame:
+    """Orchestrate parsing and cleaning for a file end-to-end.
+
+    Args:
+        file_path (Union[str, Path]): Path to the data file.
+        dataset_type (str): Type of environmental dataset ('air_quality').
+        file_type (Optional[str]): Explicit file format.
+        **kwargs: Additional arguments for parsing.
+
+    Returns:
+        pd.DataFrame: Fully cleaned and standardized DataFrame.
+    """
+    raw_df = parse_file(file_path=file_path, file_type=file_type, **kwargs)
+    return clean_dataframe(df=raw_df, dataset_type=dataset_type)
