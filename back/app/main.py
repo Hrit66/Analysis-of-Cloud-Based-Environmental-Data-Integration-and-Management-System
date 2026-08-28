@@ -4,7 +4,9 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
 from app.database import connect_to_mongo, close_mongo_connection
-from app.api import datasets, analytics, health
+from app.api import datasets, analytics, health, export, auth
+from app.core.logging import setup_logging, RequestLoggingMiddleware
+from app.core.rate_limit import create_limiter, add_rate_limiting
 
 
 @asynccontextmanager
@@ -16,12 +18,22 @@ async def lifespan(app: FastAPI):
 
 settings = get_settings()
 
+# Setup structured logging
+setup_logging(settings.ENVIRONMENT.upper() == "DEVELOPMENT" and "DEBUG" or "INFO")
+
 app = FastAPI(
     title="AQI Environmental Analytics API",
     description="API for environmental data upload, processing, and analytics",
     version="1.0.0",
     lifespan=lifespan,
 )
+
+# Add middlewares (order matters - logging first, then rate limiting, then CORS)
+app.add_middleware(RequestLoggingMiddleware)
+
+# Rate limiting
+limiter = create_limiter()
+add_rate_limiting(app, limiter)
 
 app.add_middleware(
     CORSMiddleware,
@@ -32,8 +44,10 @@ app.add_middleware(
 )
 
 app.include_router(health.router)
+app.include_router(auth.router)
 app.include_router(datasets.router)
 app.include_router(analytics.router)
+app.include_router(export.router)
 
 
 @app.get("/")

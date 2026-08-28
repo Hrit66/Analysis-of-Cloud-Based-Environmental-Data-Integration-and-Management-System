@@ -50,7 +50,7 @@ async def process_dataset(dataset_id: str, file_path: str, dataset_type: str):
             if anomaly_results:
                 for ar in anomaly_results:
                     ar['dataset_id'] = dataset_id
-                await database.anomalies.insert_many(aromaly_results)
+                await database.anomalies.insert_many(anomaly_results)
             
             forecast_results = generate_multi_location_forecast(cleaned_df)
             for fr in forecast_results:
@@ -140,13 +140,20 @@ async def list_datasets(
     if status:
         query["status"] = status
     
+    total = await database.datasets.count_documents(query)
     cursor = database.datasets.find(query).sort("created_at", -1).skip(skip).limit(limit)
     datasets = await cursor.to_list(length=limit)
     
     for d in datasets:
         d["id"] = str(d.pop("_id"))
     
-    return datasets
+    return {
+        "items": datasets,
+        "total": total,
+        "limit": limit,
+        "skip": skip,
+        "has_more": (skip + limit) < total,
+    }
 
 
 @router.get("/{dataset_id}")

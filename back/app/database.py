@@ -28,3 +28,4 @@ async def create_indexes():
     await db.db.datasets.create_index("created_at")
     await db.db.air_quality.create_index([("dataset_id", 1), ("timestamp", 1)])
     await db.db.air_quality.create_index("location")
+    await db.db.users.create_index("email", unique=True)

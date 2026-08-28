@@ -3,21 +3,7 @@ from typing import List, Optional
 from pydantic import BaseModel, Field
 from bson import ObjectId
 
-
-class PyObjectId(ObjectId):
-    @classmethod
-    def __get_validators__(cls):
-        yield cls.validate
-
-    @classmethod
-    def validate(cls, v):
-        if not ObjectId.is_valid(v):
-            raise ValueError("Invalid ObjectId")
-        return ObjectId(v)
-
-    @classmethod
-    def __get_pydantic_json_schema__(cls, field_schema):
-        field_schema.update(type="string")
+from app.models.dataset import PyObjectId
 
 
 class AQIResult(BaseModel):
@@ -31,10 +17,11 @@ class AQIResult(BaseModel):
     pollutant_values: dict
     sub_indices: dict
 
-    class Config:
-        populate_by_name = True
-        arbitrary_types_allowed = True
-        json_encoders = {ObjectId: str, datetime: lambda v: v.isoformat()}
+    model_config = {
+        "populate_by_name": True,
+        "arbitrary_types_allowed": True,
+        "json_encoders": {ObjectId: str, datetime: lambda v: v.isoformat()},
+    }
 
 
 class AnomalyResult(BaseModel):
@@ -47,10 +34,11 @@ class AnomalyResult(BaseModel):
     is_anomaly: bool
     anomaly_score: float
 
-    class Config:
-        populate_by_name = True
-        arbitrary_types_allowed = True
-        json_encoders = {ObjectId: str, datetime: lambda v: v.isoformat()}
+    model_config = {
+        "populate_by_name": True,
+        "arbitrary_types_allowed": True,
+        "json_encoders": {ObjectId: str, datetime: lambda v: v.isoformat()},
+    }
 
 
 class ForecastPoint(BaseModel):
@@ -58,6 +46,10 @@ class ForecastPoint(BaseModel):
     predicted_value: float
     lower_bound: Optional[float] = None
     upper_bound: Optional[float] = None
+
+    model_config = {
+        "json_encoders": {datetime: lambda v: v.isoformat()},
+    }
 
 
 class ForecastResult(BaseModel):
@@ -71,7 +63,9 @@ class ForecastResult(BaseModel):
     metrics: dict
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
-    class Config:
-        populate_by_name = True
-        arbitrary_types_allowed = True
-        json_encoders = {ObjectId: str, datetime: lambda v: v.isoformat()}
+    model_config = {
+        "protected_namespaces": (),
+        "populate_by_name": True,
+        "arbitrary_types_allowed": True,
+        "json_encoders": {ObjectId: str, datetime: lambda v: v.isoformat()},
+    }

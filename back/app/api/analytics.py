@@ -14,13 +14,14 @@ def get_database() -> AsyncIOMotorDatabase:
     return db.db
 
 
-@router.get("/aqi/{dataset_id}", response_model=List[AQIResult])
+@router.get("/aqi/{dataset_id}")
 async def get_aqi_results(
     dataset_id: str,
     location: Optional[str] = None,
     start_date: Optional[datetime] = None,
     end_date: Optional[datetime] = None,
     limit: int = 1000,
+    skip: int = 0,
     database: AsyncIOMotorDatabase = Depends(get_database),
 ):
     query = {"dataset_id": dataset_id}
@@ -35,13 +36,20 @@ async def get_aqi_results(
         if end_date:
             query["timestamp"]["$lte"] = end_date
     
-    cursor = database.air_quality.find(query).sort("timestamp", -1).limit(limit)
+    total = await database.air_quality.count_documents(query)
+    cursor = database.air_quality.find(query).sort("timestamp", -1).skip(skip).limit(limit)
     results = await cursor.to_list(length=limit)
     
     for r in results:
         r["id"] = str(r.pop("_id"))
     
-    return results
+    return {
+        "items": results,
+        "total": total,
+        "limit": limit,
+        "skip": skip,
+        "has_more": (skip + limit) < total,
+    }
 
 
 @router.get("/aqi/{dataset_id}/summary")
@@ -87,13 +95,14 @@ async def get_aqi_summary(
     return results
 
 
-@router.get("/anomalies/{dataset_id}", response_model=List[AnomalyResult])
+@router.get("/anomalies/{dataset_id}")
 async def get_anomalies(
     dataset_id: str,
     location: Optional[str] = None,
     parameter: Optional[str] = None,
     only_anomalies: bool = True,
     limit: int = 1000,
+    skip: int = 0,
     database: AsyncIOMotorDatabase = Depends(get_database),
 ):
     query = {"dataset_id": dataset_id}
@@ -105,13 +114,20 @@ async def get_anomalies(
     if only_anomalies:
         query["is_anomaly"] = True
     
-    cursor = database.anomalies.find(query).sort("timestamp", -1).limit(limit)
+    total = await database.anomalies.count_documents(query)
+    cursor = database.anomalies.find(query).sort("timestamp", -1).skip(skip).limit(limit)
     results = await cursor.to_list(length=limit)
     
     for r in results:
         r["id"] = str(r.pop("_id"))
     
-    return results
+    return {
+        "items": results,
+        "total": total,
+        "limit": limit,
+        "skip": skip,
+        "has_more": (skip + limit) < total,
+    }
 
 
 @router.get("/anomalies/{dataset_id}/summary")
