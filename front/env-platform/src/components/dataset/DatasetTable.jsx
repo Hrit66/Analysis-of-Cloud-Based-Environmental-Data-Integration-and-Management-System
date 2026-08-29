@@ -3,20 +3,30 @@ import DatasetStatusBadge from './DatasetStatusBadge';
 import { Eye, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
-// Mock data
-const MOCK_DATASETS = [
-  { id: '1', name: 'Delhi_AQI_2023.csv', type: 'AQI', uploadedAt: '2023-10-15T10:30:00Z', status: 'ready', rowCount: 14500 },
-  { id: '2', name: 'Yamuna_WQI_Q3.xlsx', type: 'WQI', uploadedAt: '2023-10-16T14:20:00Z', status: 'processing', rowCount: 8200 },
-  { id: '3', name: 'Global_Temp_Anomalies.json', type: 'TEMP', uploadedAt: '2023-10-17T09:15:00Z', status: 'failed', rowCount: 1024 },
-  { id: '4', name: 'Mumbai_Rainfall_2022.csv', type: 'RAIN', uploadedAt: '2023-10-18T11:45:00Z', status: 'raw', rowCount: 365 },
-];
-
-const DatasetTable = () => {
+const DatasetTable = ({ datasets = [], onDelete }) => {
   const navigate = useNavigate();
 
   const handleView = (type) => {
     navigate(`/${type.toLowerCase()}`);
   };
+
+  const formatType = (type) => {
+    const map = { 'air_quality': 'AQI', 'water_quality': 'WQI', 'temperature': 'TEMP', 'rainfall': 'RAIN' };
+    return map[type] || type.toUpperCase();
+  };
+
+  const formatStatus = (status) => {
+    const map = { 'COMPLETED': 'ready', 'PROCESSING': 'processing', 'FAILED': 'failed', 'UPLOADED': 'raw' };
+    return map[status] || status.toLowerCase();
+  };
+
+  if (!datasets.length) {
+    return (
+      <div className="p-12 text-center text-slate-500">
+        No datasets found. Upload your first dataset to get started.
+      </div>
+    );
+  }
 
   return (
     <div className="overflow-x-auto">
@@ -32,26 +42,26 @@ const DatasetTable = () => {
           </tr>
         </thead>
         <tbody className="divide-y divide-white/40">
-          {MOCK_DATASETS.map((dataset) => (
+          {datasets.map((dataset) => (
             <tr key={dataset.id} className="hover:bg-white/50 transition-colors">
-              <td className="px-6 py-4 font-medium text-slate-900">{dataset.name}</td>
+              <td className="px-6 py-4 font-medium text-slate-900">{dataset.filename}</td>
               <td className="px-6 py-4">
                 <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-white/60 text-slate-800 shadow-sm">
-                  {dataset.type}
+                  {formatType(dataset.dataset_type)}
                 </span>
               </td>
-              <td className="px-6 py-4">{new Date(dataset.uploadedAt).toLocaleDateString()}</td>
-              <td className="px-6 py-4">{dataset.rowCount.toLocaleString()}</td>
+              <td className="px-6 py-4">{new Date(dataset.created_at).toLocaleDateString()}</td>
+              <td className="px-6 py-4">{dataset.row_count?.toLocaleString() ?? '-'}</td>
               <td className="px-6 py-4">
-                <DatasetStatusBadge status={dataset.status} />
+                <DatasetStatusBadge status={formatStatus(dataset.status)} />
               </td>
               <td className="px-6 py-4 text-right">
                 <div className="flex justify-end gap-2">
                   <button 
-                    onClick={() => handleView(dataset.type)}
-                    disabled={dataset.status !== 'ready'}
+                    onClick={() => handleView(formatType(dataset.dataset_type))}
+                    disabled={dataset.status !== 'COMPLETED'}
                     className={`p-1.5 rounded-md ${
-                      dataset.status === 'ready' 
+                      dataset.status === 'COMPLETED' 
                         ? 'text-blue-600 hover:bg-blue-50' 
                         : 'text-slate-300 cursor-not-allowed'
                     }`}
@@ -60,6 +70,7 @@ const DatasetTable = () => {
                     <Eye className="w-4 h-4" />
                   </button>
                   <button 
+                    onClick={() => onDelete?.(dataset.id)}
                     className="p-1.5 rounded-md text-red-500 hover:bg-red-50"
                     title="Delete Dataset"
                   >
