@@ -1,39 +1,71 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import AnalyticsDashboardTemplate from '../components/layout/AnalyticsDashboardTemplate';
-
-const mockAQIFetch = () => {
-  return {
-    currentAQI: 142,
-    category: 'Moderate',
-    dominantPollutant: 'PM2.5',
-    avgChange: '+5%',
-    series: Array.from({ length: 30 }).map((_, i) => ({
-      date: `Oct ${i + 1}`,
-      value: Math.floor(Math.random() * 100) + 100, // Random between 100-200
-    }))
-  };
-};
+import { fetchAQISummary, fetchAQIData, computeAQISummaryCards } from '../lib/api';
 
 const cardsConfig = [
-  { title: 'Current AQI', dataKey: 'currentAQI', trend: '+5%', statusKey: 'category', color: 'orange' },
-  { title: 'Dominant Pollutant', dataKey: 'dominantPollutant', trend: null, color: 'blue' },
-  { title: '24h Change', dataKey: 'avgChange', trend: '+5%', color: 'yellow' },
-  { title: 'Active Anomalies', dataKey: 'anomalies', trend: '2 New', color: 'red' }, // Mock stat
+  { title: 'Current AQI', dataKey: 'currentAQI', statusKey: 'category', color: 'orange' },
+  { title: 'Dominant Pollutant', dataKey: 'dominantPollutant', color: 'blue' },
+  { title: '24h Change', dataKey: 'avgChange', color: 'yellow' },
+  { title: 'Active Anomalies', dataKey: 'anomalies', color: 'red' },
 ];
 
 const chartConfig = {
   dataKey: 'value',
-  color: '#f97316', // Orange
+  color: '#f97316',
   yLabel: 'Air Quality Index'
 };
 
 const AQIDashboard = () => {
+  const [datasetId, setDatasetId] = useState(null);
+  const [location, setLocation] = useState(null);
+  const [summary, setSummary] = useState(null);
+
+  useEffect(() => {
+    fetch(`${import.meta.env.VITE_API_URL}/datasets?status=COMPLETED`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.length > 0) {
+          setDatasetId(data[0].id);
+        }
+      });
+  }, []);
+
+  useEffect(() => {
+    if (!datasetId) return;
+    fetchAQISummary(datasetId)
+      .then(data => {
+        if (data.length > 0) {
+          setSummary(data[0]);
+          setLocation(data[0].location);
+        }
+      })
+      .catch(console.error);
+  }, [datasetId]);
+
+  const fetchAQIDataForTemplate = async (id) => {
+    if (!id) return null;
+    const aqiData = await fetchAQIData(id, location);
+    return computeAQISummaryCards(aqiData);
+  };
+
+  if (!datasetId) {
+    return (
+      <div className="glass-card p-12 rounded-2xl text-center">
+        <p className="text-slate-600">No completed datasets found.</p>
+        <p className="text-sm text-slate-500 mt-2">Upload a dataset first from the Upload page.</p>
+      </div>
+    );
+  }
+
   return (
     <AnalyticsDashboardTemplate
       title="Air Quality (AQI) Dashboard"
-      fetchFn={mockAQIFetch}
+      fetchFn={fetchAQIDataForTemplate}
       cardsConfig={cardsConfig}
       chartConfig={chartConfig}
+      apiEndpoint="aqi"
+      datasetId={datasetId}
+      location={location || summary?.location}
     />
   );
 };

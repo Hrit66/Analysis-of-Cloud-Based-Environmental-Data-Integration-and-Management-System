@@ -1,4 +1,19 @@
 __pycache__/
+venv/
+models/
+uploads/
+.env
+*.env
+atlas-credentials.env
+*.pyc
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.mypy_cache/
+dist/
+build/
+*.egg-info/
 
 # Virtual environments
 .venv/
