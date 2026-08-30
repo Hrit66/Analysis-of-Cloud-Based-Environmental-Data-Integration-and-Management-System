@@ -156,8 +156,44 @@ def train_wqi_predictor(
             logger.warning("No data supplied -> generating synthetic water quality data.")
             df = _generate_synthetic_data()
 
-    water_cols = [c for c in cfg["data"]["water_cols"] if c in df.columns or c.lower() in [x.lower() for x in df.columns]]
+    # Normalize column names for flexible dataset loading
+    mapping = {}
+    for c in df.columns:
+        c_clean = str(c).lower().replace("_", "").replace(".", "").replace(" ", "")
+        if c_clean in ("ph",):
+            mapping[c] = "pH"
+        elif c_clean in ("solids", "tds"):
+            mapping[c] = "TDS"
+        elif c_clean in ("turbidity",):
+            mapping[c] = "turbidity"
+        elif c_clean in ("hardness",):
+            mapping[c] = "hardness"
+        elif c_clean in ("chlorides", "chloramines"):
+            mapping[c] = "chlorides"
+        elif c_clean in ("sulfate", "sulfates"):
+            mapping[c] = "sulfates"
+        elif c_clean in ("nitrates", "nitrate"):
+            mapping[c] = "nitrates"
+        elif c_clean in ("fluorides", "fluoride"):
+            mapping[c] = "fluorides"
+        elif c_clean in ("iron",):
+            mapping[c] = "iron"
+        elif c_clean in ("manganese",):
+            mapping[c] = "manganese"
+        elif c_clean in ("do", "dissolvedoxygen"):
+            mapping[c] = "do"
+        elif c_clean in ("bod", "biologicaloxygendemand"):
+            mapping[c] = "bod"
+        elif c_clean in ("datetime", "timestamp", "date", "time", "ts"):
+            mapping[c] = cfg["data"]["timestamp_col"]
+    df = df.rename(columns=mapping)
+
     ts_col = cfg["data"]["timestamp_col"]
+    if ts_col not in df.columns:
+        logger.info("Creating default timestamp column '%s' for non-time-series dataset", ts_col)
+        df[ts_col] = pd.date_range("2023-01-01", periods=len(df), freq="1h")
+
+    water_cols = [c for c in cfg["data"]["water_cols"] if c in df.columns or c.lower() in [x.lower() for x in df.columns]]
 
     # 2. Derive targets if not present
     target_wqi = cfg["data"]["target_wqi_col"]

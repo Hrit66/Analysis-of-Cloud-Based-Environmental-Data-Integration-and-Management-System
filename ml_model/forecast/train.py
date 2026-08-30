@@ -217,7 +217,7 @@ def train_forecast_model(
             logger.warning("No data supplied – generating synthetic time-series.")
             df = _generate_synthetic_data(target=target_col)
 
-    # Normalize column names (e.g. Datetime -> measured_at, PM2.5 -> pm25)
+    # Normalize column names (e.g. Datetime -> measured_at, PM2.5 -> pm25, TEMP -> temperature)
     mapping = {}
     for col in df.columns:
         c_clean = str(col).lower().replace(".", "").replace("_", "").replace(" ", "")
@@ -235,19 +235,41 @@ def train_forecast_model(
             mapping[col] = "co"
         elif c_clean == "o3":
             mapping[col] = "o3"
+        elif c_clean in ("temp", "temperature"):
+            mapping[col] = "temperature"
+        elif c_clean in ("dewp", "pres", "humidity"):
+            mapping[col] = "humidity"
+        elif c_clean in ("wspm", "windspeed"):
+            mapping[col] = "wind_speed"
     df = df.rename(columns=mapping)
+    df = df.loc[:, ~df.columns.duplicated()].copy()
+    df = df.reset_index(drop=True)
+
+    ts_col = cfg["data"]["timestamp_col"]
+    if ts_col not in df.columns:
+        date_parts = [c for c in ["year", "month", "day", "hour"] if c in df.columns or c.capitalize() in df.columns]
+        if len(date_parts) == 4:
+            logger.info("Constructing timestamp '%s' from year, month, day, hour columns", ts_col)
+            df[ts_col] = pd.to_datetime(df[["year", "month", "day", "hour"]])
+        elif "date" in [c.lower() for c in df.columns]:
+            d_col = [c for c in df.columns if c.lower() == "date"][0]
+            df[ts_col] = pd.to_datetime(df[d_col])
+        else:
+            logger.info("Creating default timestamp column '%s'", ts_col)
+            df[ts_col] = pd.date_range("2023-01-01", periods=len(df), freq="1h")
+
     t_clean = str(target_col).lower().replace(".", "").replace("_", "").replace(" ", "")
     for col in df.columns:
         if str(col).lower().replace(".", "").replace("_", "").replace(" ", "") == t_clean:
             target_col = col
             break
 
-    ts_col = cfg["data"]["timestamp_col"]
     numeric_cols = [c for c in df.select_dtypes(include=[np.number]).columns if c != ts_col]
     if target_col not in numeric_cols and target_col in df.columns:
         numeric_cols.append(target_col)
     keep_cols = [ts_col] + numeric_cols if ts_col in df.columns else numeric_cols
     df = df[[c for c in keep_cols if c in df.columns]]
+    df = df.loc[:, ~df.columns.duplicated()].copy()
 
     pollutant_cols = [c for c in cfg["data"]["pollutant_cols"] if c in df.columns]
     weather_cols = [c for c in cfg["data"]["weather_cols"] if c in df.columns]

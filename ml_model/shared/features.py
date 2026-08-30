@@ -89,7 +89,7 @@ def add_lag_features(
     cols : Feature columns to lag.
     lags : List of integer step lags (e.g., [1, 2, 3, 6, 12, 24]).
     """
-    df = df.sort_values(timestamp_col).copy()
+    df = df.sort_values(timestamp_col).reset_index(drop=True)
     new_cols: list[pd.Series] = []
     for col in cols:
         if col not in df.columns:
@@ -118,7 +118,7 @@ def add_rolling_features(
     windows : Window sizes in rows (e.g., [3, 6, 12, 24]).
     stats   : Any subset of {'mean', 'std', 'min', 'max', 'median'}.
     """
-    df = df.sort_values(timestamp_col).copy()
+    df = df.sort_values(timestamp_col).reset_index(drop=True)
     new_cols: list[pd.Series] = []
     for col in cols:
         if col not in df.columns:
