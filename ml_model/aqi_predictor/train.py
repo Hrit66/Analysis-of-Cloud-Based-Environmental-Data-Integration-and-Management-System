@@ -204,9 +204,8 @@ def train_aqi_predictor(
     pollutant_cols = [c for c in cfg["data"]["pollutant_cols"] if c in df.columns]
 
     # ── 2. Derive labels ──────────────────────────────────────────────────────
-    if target_cat_col not in df.columns or target_num_col not in df.columns:
-        logger.info("Deriving AQI numeric and category labels from pollutant readings…")
-        df[target_num_col], df[target_cat_col] = _derive_labels_from_pollutants(df, pollutant_cols)
+    logger.info("Deriving standard CPCB AQI numeric and category labels from pollutant readings…")
+    df[target_num_col], df[target_cat_col] = _derive_labels_from_pollutants(df, pollutant_cols)
 
     # ── 3. Feature engineering ────────────────────────────────────────────────
     feat_cfg = cfg["features"]
