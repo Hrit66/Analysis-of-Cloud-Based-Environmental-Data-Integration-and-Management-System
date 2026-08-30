@@ -1,0 +1,51 @@
+# anomaly/config.yaml
+# ===================
+# Configuration for the Isolation Forest anomaly-detection pipeline.
+# Edit values here; all training/evaluation scripts read from this file.
+
+model:
+  name: "isolation_forest_anomaly"
+  version: "1.0.0"                  # bumped automatically by model_registry.py
+
+  # IsolationForest hyperparameters
+  n_estimators: 200                 # number of trees
+  max_samples: "auto"               # "auto" = min(256, n_samples)
+  contamination: 0.05               # expected fraction of anomalies (5 %)
+  max_features: 1.0                 # fraction of features per tree
+  bootstrap: false
+  random_state: 42                  # fixed for reproducibility; NOT for data splitting
+
+data:
+  timestamp_col: "measured_at"
+  pollutant_cols:
+    - pm25
+    - pm10
+    - no2
+    - so2
+    - co
+    - o3
+  test_ratio: 0.20                  # strict chronological holdout
+  gap_rows: 24                      # 24-row gap to avoid lag-feature leakage
+
+features:
+  lags: [1, 2, 3, 6, 12, 24]
+  rolling_windows: [3, 6, 12, 24]
+  include_cyclical: true
+  include_t_rel: true
+
+registry:
+  local_dir: "models/anomaly"       # relative to ml_model/
+  artifact_prefix: "isolation_forest"
+
+cloud:
+  bucket: ""                        # set via env var CLOUD_BUCKET_ANOMALY
+  prefix: "ml_model/anomaly/"
+
+evaluation:
+  ks_alpha: 0.05                    # drift significance threshold
+  score_threshold: -0.1             # IsolationForest decision_function threshold
+                                    # scores < threshold → anomaly
+  report_dir: "models/reports/anomaly"
+
+logging:
+  level: "INFO"

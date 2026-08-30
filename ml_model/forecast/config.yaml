@@ -1,0 +1,66 @@
+# forecast/config.yaml
+# ====================
+# Configuration for the XGBoost time-series forecasting pipeline.
+
+model:
+  name: "xgboost_forecast"
+  version: "1.0.0"
+
+  # XGBoost hyperparameters
+  n_estimators: 500
+  max_depth: 6
+  learning_rate: 0.05
+  subsample: 0.8
+  colsample_bytree: 0.8
+  reg_alpha: 0.1                    # L1 regularisation
+  reg_lambda: 1.0                   # L2 regularisation
+  objective: "reg:squarederror"
+  eval_metric: "rmse"
+  early_stopping_rounds: 30
+  random_state: 42
+
+data:
+  timestamp_col: "measured_at"
+  target_col: "pm25"                # default target – overridden by API call
+  pollutant_cols:
+    - pm25
+    - pm10
+    - no2
+    - so2
+    - co
+    - o3
+  weather_cols:
+    - temperature
+    - humidity
+    - wind_speed
+  test_ratio: 0.20
+  gap_rows: 24                      # prevent leakage from lag features
+
+features:
+  lags: [1, 2, 3, 6, 12, 24, 48]
+  rolling_windows: [3, 6, 12, 24, 48]
+  include_cyclical: true
+  include_t_rel: true
+
+backtesting:
+  n_splits: 5
+  min_train_ratio: 0.40
+
+forecast:
+  horizons_hours: [24, 48, 72]      # supported prediction horizons
+
+registry:
+  local_dir: "models/forecast"
+  artifact_prefix: "xgb_forecast"
+
+cloud:
+  bucket: ""                        # set via env var CLOUD_BUCKET_FORECAST
+  prefix: "ml_model/forecast/"
+
+evaluation:
+  ks_alpha: 0.05
+  mae_retrain_threshold: 50.0       # trigger retraining if MAE > this value
+  report_dir: "models/reports/forecast"
+
+logging:
+  level: "INFO"

@@ -1,0 +1,64 @@
+# aqi_predictor/config.yaml
+# =========================
+# Configuration for the AQI category classification pipeline.
+
+model:
+  name: "xgboost_aqi_classifier"
+  version: "1.0.0"
+
+  # XGBoost classifier hyperparameters
+  n_estimators: 300
+  max_depth: 5
+  learning_rate: 0.1
+  subsample: 0.85
+  colsample_bytree: 0.85
+  reg_alpha: 0.05
+  reg_lambda: 1.0
+  objective: "multi:softprob"
+  eval_metric: "mlogloss"
+  early_stopping_rounds: 20
+  random_state: 42
+  use_label_encoder: false
+
+data:
+  timestamp_col: "measured_at"
+  target_col: "aqi_category"        # ordinal 0–5 (Good to Severe)
+  pollutant_cols:
+    - pm25
+    - pm10
+    - no2
+    - so2
+    - co
+    - o3
+  test_ratio: 0.20
+  gap_rows: 0                       # AQI category depends on instantaneous values
+
+# CPCB AQI category labels (used for display in evaluation report)
+aqi_categories:
+  0: "Good"
+  1: "Satisfactory"
+  2: "Moderate"
+  3: "Poor"
+  4: "Very Poor"
+  5: "Severe"
+
+features:
+  include_ratios: true              # add pairwise pollutant ratio features
+  include_cyclical: true
+  include_t_rel: false              # not needed for instant AQI category
+
+registry:
+  local_dir: "models/aqi_predictor"
+  artifact_prefix: "xgb_aqi"
+
+cloud:
+  bucket: ""                        # set via env var CLOUD_BUCKET_AQI
+  prefix: "ml_model/aqi_predictor/"
+
+evaluation:
+  f1_retrain_threshold: 0.70        # trigger retraining if weighted F1 < this
+  ks_alpha: 0.05
+  report_dir: "models/reports/aqi_predictor"
+
+logging:
+  level: "INFO"

@@ -1,0 +1,38 @@
+# wqi_predictor/config.yaml
+data:
+  target_wqi_col: "wqi"
+  target_category_col: "category"
+  timestamp_col: "measured_at"
+  test_ratio: 0.2
+  gap_rows: 0
+  water_cols: ["pH", "turbidity", "TDS", "hardness", "chlorides", "sulfates", "nitrates", "fluorides", "iron", "manganese", "do", "bod"]
+
+features:
+  include_ratios: true
+  include_cyclical: true
+
+model:
+  regressor:
+    n_estimators: 100
+    learning_rate: 0.05
+    max_depth: 6
+    subsample: 0.8
+    colsample_bytree: 0.8
+    random_state: 42
+  classifier:
+    n_estimators: 100
+    learning_rate: 0.05
+    max_depth: 6
+    subsample: 0.8
+    colsample_bytree: 0.8
+    random_state: 42
+
+evaluation:
+  mae_retrain_threshold: 15.0
+  f1_retrain_threshold: 0.70
+  ks_alpha: 0.05
+  report_dir: "models/reports/wqi_predictor"
+
+registry:
+  local_dir: "models/wqi_predictor"
+  artifact_prefix: "xgb_wqi"
