@@ -15,7 +15,8 @@ export async function fetchAQIData(datasetId, location, startDate, endDate) {
   
   const res = await fetch(`${API_BASE}/analytics/aqi/${datasetId}?${params}`);
   if (!res.ok) throw new Error('Failed to fetch AQI data');
-  return res.json();
+  const data = await res.json();
+  return data.items || data;
 }
 
 export async function fetchAnomalies(datasetId, options = {}) {
@@ -27,7 +28,8 @@ export async function fetchAnomalies(datasetId, options = {}) {
   
   const res = await fetch(`${API_BASE}/analytics/anomalies/${datasetId}?${params}`);
   if (!res.ok) throw new Error('Failed to fetch anomalies');
-  return res.json();
+  const data = await res.json();
+  return data.items || data;
 }
 
 export async function fetchAnomalySummary(datasetId) {
@@ -43,7 +45,8 @@ export async function fetchForecasts(datasetId, options = {}) {
   
   const res = await fetch(`${API_BASE}/analytics/forecasts/${datasetId}?${params}`);
   if (!res.ok) throw new Error('Failed to fetch forecasts');
-  return res.json();
+  const data = await res.json();
+  return data.items || data;
 }
 
 export async function fetchTrends(datasetId, location, parameter, days = 30) {
@@ -55,7 +58,9 @@ export async function fetchTrends(datasetId, location, parameter, days = 30) {
 export async function fetchDatasets() {
   const res = await fetch(`${API_BASE}/datasets`);
   if (!res.ok) throw new Error('Failed to fetch datasets');
-  return res.json();
+  const data = await res.json();
+  // Handle both old format (array) and new paginated format (items array)
+  return data.items || data;
 }
 
 export async function uploadDataset(file, datasetType = 'air_quality') {

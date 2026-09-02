@@ -12,7 +12,8 @@ const AnomaliesPage = () => {
   useEffect(() => {
     fetchDatasets()
       .then(data => {
-        const completed = data.find(d => d.status === 'COMPLETED');
+        const items = data.items || data;
+        const completed = items.find(d => d.status === 'completed');
         if (completed) setDatasetId(completed.id);
       })
       .catch(console.error);

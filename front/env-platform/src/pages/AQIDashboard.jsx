@@ -21,10 +21,12 @@ const AQIDashboard = () => {
   const [summary, setSummary] = useState(null);
 
   useEffect(() => {
-    fetch(`${import.meta.env.VITE_API_URL}/datasets?status=COMPLETED`)
+    fetch(`${import.meta.env.VITE_API_URL}/datasets?status=completed`)
       .then(r => r.json())
       .then(data => {
-        if (data.length > 0) {
+        if (data.items?.length > 0) {
+          setDatasetId(data.items[0].id);
+        } else if (data.length > 0) {
           setDatasetId(data[0].id);
         }
       });
