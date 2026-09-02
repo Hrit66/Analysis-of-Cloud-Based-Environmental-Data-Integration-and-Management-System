@@ -16,7 +16,7 @@ const DatasetTable = ({ datasets = [], onDelete }) => {
   };
 
   const formatStatus = (status) => {
-    const map = { 'COMPLETED': 'ready', 'PROCESSING': 'processing', 'FAILED': 'failed', 'UPLOADED': 'raw' };
+    const map = { 'completed': 'ready', 'processing': 'processing', 'failed': 'failed', 'uploaded': 'raw' };
     return map[status] || status.toLowerCase();
   };
 
@@ -59,9 +59,9 @@ const DatasetTable = ({ datasets = [], onDelete }) => {
                 <div className="flex justify-end gap-2">
                   <button 
                     onClick={() => handleView(formatType(dataset.dataset_type))}
-                    disabled={dataset.status !== 'COMPLETED'}
+                    disabled={dataset.status !== 'completed'}
                     className={`p-1.5 rounded-md ${
-                      dataset.status === 'COMPLETED' 
+                      dataset.status === 'completed' 
                         ? 'text-blue-600 hover:bg-blue-50' 
                         : 'text-slate-300 cursor-not-allowed'
                     }`}
