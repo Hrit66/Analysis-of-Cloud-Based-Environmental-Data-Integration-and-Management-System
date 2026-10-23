@@ -1,28 +1,61 @@
 import React, { useState, useEffect } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { AlertTriangle, Filter } from 'lucide-react';
-import { fetchAnomalies, fetchDatasets } from '../lib/api';
+import SpeederLoader from '../components/common/SpeederLoader';
+import { fetchAnomalies, fetchDatasets, datasetDisplayLabel } from '../lib/api';
 
 const AnomaliesPage = () => {
+  const [searchParams] = useSearchParams();
+  const queryDatasetId = searchParams.get('dataset_id');
+  const queryParameter = searchParams.get('parameter');
   const [anomalies, setAnomalies] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [datasetsLoaded, setDatasetsLoaded] = useState(false);
   const [error, setError] = useState(null);
   const [filter, setFilter] = useState('All');
   const [datasetId, setDatasetId] = useState(null);
+  const [datasetOptions, setDatasetOptions] = useState([]);
 
   useEffect(() => {
+    let active = true;
     fetchDatasets()
-      .then(data => {
-        const items = data.items || data;
-        const completed = items.find(d => d.status === 'completed');
-        if (completed) setDatasetId(completed.id);
+      .then(all => {
+        if (!active) return;
+        const completed = (Array.isArray(all) ? all : [])
+          .filter(d => d.status === 'completed')
+          .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+        setDatasetOptions(completed);
+        setDatasetId(prev => (
+          queryDatasetId
+            || (completed.some(d => d.id === prev) ? prev : (completed[0]?.id ?? null))
+        ));
+        setDatasetsLoaded(true);
+        if (completed.length === 0) setLoading(false);
       })
-      .catch(console.error);
-  }, []);
+      .catch(err => {
+        if (!active) return;
+        setError(err.message || 'Could not load datasets');
+        setDatasetsLoaded(true);
+        setLoading(false);
+      });
+    return () => { active = false; };
+  }, [queryDatasetId]);
+
+  const showAllRows = filter === 'Normal';
 
   useEffect(() => {
-    if (!datasetId) return;
+    if (!datasetsLoaded) return;
+    if (!datasetId) {
+      setAnomalies([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
-    fetchAnomalies(datasetId)
+    setError(null);
+    fetchAnomalies(datasetId, {
+      parameter: queryParameter || undefined,
+      onlyAnomalies: !showAllRows,
+    })
       .then(data => {
         setAnomalies(data);
         setLoading(false);
@@ -31,11 +64,7 @@ const AnomaliesPage = () => {
         setError(err.message);
         setLoading(false);
       });
-  }, [datasetId]);
-
-  const filteredData = filter === 'All' 
-    ? anomalies 
-    : anomalies.filter(a => a.is_anomaly && a.severity === filter);
+  }, [datasetId, datasetsLoaded, queryParameter, showAllRows]);
 
   const getSeverityStyle = (severity) => {
     switch(severity) {
@@ -48,25 +77,35 @@ const AnomaliesPage = () => {
 
   const getSeverity = (anomaly) => {
     if (!anomaly.is_anomaly) return 'Normal';
-    const score = Math.abs(anomaly.anomaly_score);
+    const score = Math.abs(anomaly.anomaly_score ?? 0);
+    if (anomaly.detector === 'seasonal_residual' || anomaly.detector === 'robust_zscore') {
+      if (score >= 5) return 'Critical';
+      if (score >= 4) return 'High';
+      return 'Medium';
+    }
     if (score > 0.5) return 'Critical';
     if (score > 0.3) return 'High';
     return 'Medium';
   };
 
-  if (loading) {
+  const KIND_LABELS = {
+    heavy_rain: 'Heavy rain event',
+    dry_spell: 'Dry spell',
+  };
+
+  const filteredData = filter === 'All'
+    ? anomalies
+    : anomalies.filter(anomaly => getSeverity(anomaly) === filter);
+
+  if (loading || !datasetsLoaded) {
     return (
-      <div className="space-y-6 animate-pulse">
-        <div className="h-8 bg-slate-200 rounded w-64"></div>
-        <div className="glass-panel rounded-2xl overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead><tr><th className="px-6 py-4 h-12 bg-slate-200"></th></tr></thead>
-              <tbody>
-                {[1,2,3,4].map(i => <tr key={i}><td className="px-6 py-4 h-12 bg-slate-200"></td></tr>)}
-              </tbody>
-            </table>
-          </div>
+      <div className="space-y-6">
+        <div className="space-y-2 animate-pulse">
+          <div className="h-8 bg-slate-200 rounded w-64"></div>
+          <div className="h-4 bg-slate-200 rounded w-80"></div>
+        </div>
+        <div className="glass-panel relative h-80 overflow-hidden rounded-2xl">
+          <SpeederLoader label="Loading anomalies" />
         </div>
       </div>
     );
@@ -84,8 +123,11 @@ const AnomaliesPage = () => {
   if (!datasetId) {
     return (
       <div className="glass-card p-12 rounded-2xl text-center">
-        <p className="text-slate-600">No completed datasets found.</p>
-        <p className="text-sm text-slate-500 mt-2">Upload a dataset first from the Upload page.</p>
+        <p className="text-slate-600">No dataset available.</p>
+        <p className="text-sm text-slate-500 mt-2">Upload a dataset first — anomalies are listed per dataset here.</p>
+        <Link to="/upload" className="mt-4 inline-flex rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+          Upload a dataset
+        </Link>
       </div>
     );
   }
@@ -95,22 +137,44 @@ const AnomaliesPage = () => {
       <div className="flex justify-between items-end">
         <div>
           <h1 className="text-2xl font-bold text-slate-800">Detected Anomalies</h1>
-          <p className="text-slate-600 mt-1">Review statistical outliers and parameter breaches.</p>
+          <p className="text-slate-600 mt-1">
+            {queryParameter
+              ? `Flagged ${queryParameter} days (residual detector, robust z > 3) in dataset ${datasetId.slice(0, 8)}...`
+              : `Review statistical outliers and parameter breaches for dataset ${datasetId.slice(0, 8)}...`}
+          </p>
         </div>
         
-        <div className="flex items-center gap-2 glass-card rounded-xl p-2 px-4 shadow-sm animate-fade-in-up">
-          <Filter className="w-4 h-4 text-slate-500 ml-1" />
-          <select 
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-            className="text-sm text-slate-700 bg-transparent border-none outline-none focus:ring-0 pr-6"
-          >
-            <option value="All">All</option>
-            <option value="Critical">Critical</option>
-            <option value="High">High</option>
-            <option value="Medium">Medium</option>
-            <option value="Normal">Normal</option>
-          </select>
+        <div className="flex items-center gap-2">
+          {datasetOptions.length > 1 && (
+            <div className="glass-card rounded-xl p-2 px-4 shadow-sm animate-fade-in-up">
+              <select
+                value={datasetId}
+                onChange={(e) => setDatasetId(e.target.value)}
+                className="text-sm text-slate-700 bg-transparent border-none outline-none focus:ring-0 max-w-[240px]"
+                title="Dataset whose anomalies are listed"
+              >
+                {datasetOptions.map(dataset => (
+                  <option key={dataset.id} value={dataset.id}>
+                    {datasetDisplayLabel(dataset)}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+          <div className="flex items-center gap-2 glass-card rounded-xl p-2 px-4 shadow-sm animate-fade-in-up">
+            <Filter className="w-4 h-4 text-slate-500 ml-1" />
+            <select 
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+              className="text-sm text-slate-700 bg-transparent border-none outline-none focus:ring-0 pr-6"
+            >
+              <option value="All">All</option>
+              <option value="Critical">Critical</option>
+              <option value="High">High</option>
+              <option value="Medium">Medium</option>
+              <option value="Normal">Normal</option>
+            </select>
+          </div>
         </div>
       </div>
 
@@ -142,8 +206,19 @@ const AnomaliesPage = () => {
                       <td className="px-6 py-4">{new Date(anomaly.timestamp).toLocaleString()}</td>
                       <td className="px-6 py-4 font-medium text-slate-900">{anomaly.location}</td>
                       <td className="px-6 py-4 font-medium text-slate-900">{anomaly.parameter.toUpperCase()}</td>
-                      <td className="px-6 py-4 font-bold text-slate-800">{anomaly.value}</td>
-                      <td className="px-6 py-4 text-slate-500">{anomaly.anomaly_score?.toFixed(3) ?? '-'}</td>
+                      <td className="px-6 py-4 font-bold text-slate-800">
+                        {anomaly.value}
+                        {anomaly.kind && (
+                          <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-sky-50 text-sky-700 border border-sky-200">
+                            {KIND_LABELS[anomaly.kind] || anomaly.kind}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 text-slate-500">
+                        {anomaly.anomaly_score !== null && anomaly.anomaly_score !== undefined
+                          ? anomaly.anomaly_score.toFixed(anomaly.detector ? 2 : 3)
+                          : '-'}
+                      </td>
                       <td className="px-6 py-4">
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getSeverityStyle(severity)}`}>
                           {severity === 'Critical' && <AlertTriangle className="w-3 h-3 mr-1" />}

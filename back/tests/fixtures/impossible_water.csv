@@ -1,0 +1,3 @@
+timestamp,location,pH,turbidity,TDS,DO
+2026-10-01 00:00:00,RiverPoint,7.2,5,300,6.5
+2026-10-01 01:00:00,RiverPoint,20,-50,99999,200

@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import List, Optional
+from typing import Dict, List, Optional
 from pydantic import BaseModel, Field
 from bson import ObjectId
 
@@ -46,6 +46,9 @@ class ForecastPoint(BaseModel):
     predicted_value: float
     lower_bound: Optional[float] = None
     upper_bound: Optional[float] = None
+    rain_probability: Optional[float] = None
+    category_probabilities: Optional[Dict[str, float]] = None
+    most_likely_category: Optional[str] = None
 
     model_config = {
         "json_encoders": {datetime: lambda v: v.isoformat()},

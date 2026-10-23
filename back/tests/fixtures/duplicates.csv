@@ -1,0 +1,5 @@
+timestamp,location,pm25
+2026-10-11T00:00:00Z,DupCity,10
+2026-10-11T00:00:00Z,DupCity,10
+2026-10-11T00:00:00Z,DupCity,12
+2026-10-11T01:00:00Z,DupCity,20

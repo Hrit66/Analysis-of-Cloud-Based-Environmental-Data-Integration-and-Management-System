@@ -1,14 +1,22 @@
 import React from 'react';
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
 
-const Card = ({ title, value, trend, status, color }) => {
-  
+const Card = ({ title, value, trend, status, color, trendTone = 'default', trendLabel, caption, onClick }) => {
+  const isUp = trend ? trend.startsWith('+') : false;
+
   const getTrendIcon = () => {
     if (!trend) return <Minus className="w-4 h-4 text-slate-400" />;
-    if (trend.startsWith('+')) return <TrendingUp className="w-4 h-4 text-green-500" />;
-    if (trend.startsWith('-')) return <TrendingDown className="w-4 h-4 text-red-500" />;
-    return <Minus className="w-4 h-4 text-slate-400" />;
+    const className = trendTone === 'direction'
+      ? (isUp ? 'text-orange-500' : 'text-sky-500')
+      : (isUp ? 'text-green-500' : 'text-red-500');
+    return isUp
+      ? <TrendingUp className={`w-4 h-4 ${className}`} />
+      : <TrendingDown className={`w-4 h-4 ${className}`} />;
   };
+
+  const trendTextColor = trendTone === 'direction'
+    ? (isUp ? 'text-orange-600' : 'text-sky-600')
+    : (isUp ? 'text-green-600' : 'text-red-600');
 
   const getStatusColor = () => {
     switch(color) {
@@ -22,7 +30,13 @@ const Card = ({ title, value, trend, status, color }) => {
   };
 
   return (
-    <div className="glass-card p-6 rounded-2xl flex flex-col justify-between animate-fade-in-up">
+    <div
+      className={`glass-card p-6 rounded-2xl flex flex-col justify-between animate-fade-in-up ${onClick ? 'cursor-pointer transition hover:shadow-md hover:-translate-y-0.5' : ''}`}
+      onClick={onClick}
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={onClick ? (event) => { if (event.key === 'Enter' || event.key === ' ') onClick(event); } : undefined}
+    >
       <div className="flex justify-between items-start mb-4">
         <h3 className="text-sm font-medium text-slate-500">{title}</h3>
         {status && (
@@ -33,17 +47,22 @@ const Card = ({ title, value, trend, status, color }) => {
       </div>
       
       <div className="flex items-end justify-between">
-        <div className="text-3xl font-bold text-slate-800">{value}</div>
+        <div>
+          <div className="text-3xl font-bold text-slate-800">{value}</div>
+          {caption && (
+            <div className="text-[10px] text-slate-400 mt-1">{caption}</div>
+          )}
+        </div>
         
         {trend && (
-          <div className="flex items-center gap-1 text-sm font-medium">
-            {getTrendIcon()}
-            <span className={
-              trend.startsWith('+') ? 'text-green-600' : 
-              trend.startsWith('-') ? 'text-red-600' : 'text-slate-500'
-            }>
-              {trend}
-            </span>
+          <div className="flex flex-col items-end">
+            <div className="flex items-center gap-1 text-sm font-medium">
+              {getTrendIcon()}
+              <span className={trendTextColor}>{trend}</span>
+            </div>
+            {trendLabel && (
+              <span className="text-[10px] text-slate-400 mt-0.5">{trendLabel}</span>
+            )}
           </div>
         )}
       </div>

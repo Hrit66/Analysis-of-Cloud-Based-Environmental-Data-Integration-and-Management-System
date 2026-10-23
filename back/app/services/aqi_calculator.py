@@ -2,84 +2,136 @@ import numpy as np
 from typing import Dict, Tuple, Optional
 
 
+# CPCB breakpoints, made continuous: each band starts where the previous one
+# ends. The old tables had 1-unit gaps (30->31, 60->61, 168->169, ...), so a
+# value inside a gap produced no sub-index and silently dropped that pollutant
+# from the AQI. Boundaries are inclusive at the lower edge and map linearly
+# within the band; ``sub_index`` assigns the shared boundary to the new band.
 CPCB_BREAKPOINTS = {
     'pm25': [
         (0, 30, 0, 50),
-        (31, 60, 51, 100),
-        (61, 90, 101, 200),
-        (91, 120, 201, 300),
-        (121, 250, 301, 400),
-        (251, 500, 401, 500),
+        (30, 60, 50, 100),
+        (60, 90, 100, 200),
+        (90, 120, 200, 300),
+        (120, 250, 300, 400),
+        (250, 500, 400, 500),
     ],
     'pm10': [
         (0, 50, 0, 50),
-        (51, 100, 51, 100),
-        (101, 250, 101, 200),
-        (251, 350, 201, 300),
-        (351, 430, 301, 400),
-        (431, 600, 401, 500),
+        (50, 100, 50, 100),
+        (100, 250, 100, 200),
+        (250, 350, 200, 300),
+        (350, 430, 300, 400),
+        (430, 600, 400, 500),
     ],
     'no2': [
         (0, 40, 0, 50),
-        (41, 80, 51, 100),
-        (81, 180, 101, 200),
-        (181, 280, 201, 300),
-        (281, 400, 301, 400),
-        (401, 600, 401, 500),
+        (40, 80, 50, 100),
+        (80, 180, 100, 200),
+        (180, 280, 200, 300),
+        (280, 400, 300, 400),
+        (400, 600, 400, 500),
     ],
     'so2': [
         (0, 40, 0, 50),
-        (41, 80, 51, 100),
-        (81, 380, 101, 200),
-        (381, 800, 201, 300),
-        (801, 1600, 301, 400),
-        (1601, 2400, 401, 500),
+        (40, 80, 50, 100),
+        (80, 380, 100, 200),
+        (380, 800, 200, 300),
+        (800, 1600, 300, 400),
+        (1600, 2400, 400, 500),
     ],
+    # CO is published in mg/m3; stored CO is converted from ug/m3 first.
     'co': [
         (0, 1.0, 0, 50),
-        (1.1, 2.0, 51, 100),
-        (2.1, 10.0, 101, 200),
-        (10.1, 17.0, 201, 300),
-        (17.1, 34.0, 301, 400),
-        (34.1, 50.0, 401, 500),
+        (1.0, 2.0, 50, 100),
+        (2.0, 10.0, 100, 200),
+        (10.0, 17.0, 200, 300),
+        (17.0, 34.0, 300, 400),
+        (34.0, 50.0, 400, 500),
     ],
     'o3': [
         (0, 50, 0, 50),
-        (51, 100, 51, 100),
-        (101, 168, 101, 200),
-        (169, 208, 201, 300),
-        (209, 748, 301, 400),
-        (749, 1000, 401, 500),
+        (50, 100, 50, 100),
+        (100, 168, 100, 200),
+        (168, 208, 200, 300),
+        (208, 748, 300, 400),
+        (748, 1000, 400, 500),
     ],
 }
 
+# Stored concentrations are µg/m³ for particulates/gases. CPCB's CO
+# breakpoints are in mg/m³, so only CO needs scaling before lookup.
+_CO_STORAGE_TO_BREAKPOINT = 1.0 / 1000.0
+
+# Upper bounds are inclusive and shared between adjacent categories. The old
+# table started the next band at 51/101/... leaving values such as 50.26 with no
+# category at all.
 AQI_CATEGORIES = [
     (0, 50, "Good"),
-    (51, 100, "Satisfactory"),
-    (101, 200, "Moderate"),
-    (201, 300, "Poor"),
-    (301, 400, "Very Poor"),
-    (401, 500, "Severe"),
+    (50, 100, "Satisfactory"),
+    (100, 200, "Moderate"),
+    (200, 300, "Poor"),
+    (300, 400, "Very Poor"),
+    (400, 500, "Severe"),
 ]
 
 
-def calculate_sub_index(value: float, pollutant: str) -> Optional[float]:
-    if value is None or np.isnan(value):
+def aqi_category(value) -> str:
+    """Return the CPCB category for an AQI value, using upper-bound bands."""
+    if value is None:
+        return "Unknown"
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return "Unknown"
+    if np.isnan(number) or number < 0:
+        return "Unknown"
+    for _, high, category in AQI_CATEGORIES:
+        if number <= high:
+            return category
+    return AQI_CATEGORIES[-1][2]
+
+
+def sub_index(c: float, bps) -> Optional[float]:
+    """Piecewise-linear CPCB sub-index.
+
+    ``bps`` is a list of ``(lo, hi, aqi_lo, aqi_hi)`` bands. A value falls in
+    the band whose next lower edge is above it; because consecutive bands share
+    their boundary, no valid concentration can fall into a gap. Values above
+    the last band are clamped to its top (AQI 500) and negatives are missing.
+    """
+    if c is None:
         return None
-    
+    try:
+        c = float(c)
+    except (TypeError, ValueError):
+        return None
+    if np.isnan(c) or c < 0:
+        return None
+    for i, (lo, hi, a, b) in enumerate(bps):
+        top = bps[i + 1][0] if i + 1 < len(bps) else float("inf")
+        if c < top:
+            return a + (b - a) * (min(c, hi) - lo) / (hi - lo)
+    return None
+
+
+def calculate_sub_index(value: float, pollutant: str) -> Optional[float]:
+    if value is None:
+        return None
+    try:
+        value = float(value)
+    except (TypeError, ValueError):
+        return None
+    if np.isnan(value) or value < 0:
+        return None
+
     breakpoints = CPCB_BREAKPOINTS.get(pollutant)
     if not breakpoints:
         return None
-    
-    for bp_lo, bp_hi, i_lo, i_hi in breakpoints:
-        if bp_lo <= value <= bp_hi:
-            sub_index = ((i_hi - i_lo) / (bp_hi - bp_lo)) * (value - bp_lo) + i_lo
-            return round(sub_index, 2)
-    
-    if value > breakpoints[-1][1]:
-        return 500.0
-    
-    return None
+    if pollutant == 'co':
+        value *= _CO_STORAGE_TO_BREAKPOINT
+    result = sub_index(value, breakpoints)
+    return None if result is None else round(result, 2)
 
 
 def calculate_aqi(pollutant_values: Dict[str, float]) -> Tuple[Optional[float], Optional[str], Optional[str], Dict[str, float]]:
@@ -96,14 +148,14 @@ def calculate_aqi(pollutant_values: Dict[str, float]) -> Tuple[Optional[float], 
     
     aqi = max(sub_indices.values())
     dominant_pollutant = max(sub_indices, key=sub_indices.get)
-    
-    category = "Unknown"
-    for lo, hi, cat in AQI_CATEGORIES:
-        if lo <= aqi <= hi:
-            category = cat
-            break
-    
-    return round(aqi, 2), category, dominant_pollutant, sub_indices
+
+    # CPCB publishes AQI as an integer; keep the decimal sub-indices, round the
+    # headline once so a value like 200.6 is reported as 201 (Poor), not 200.
+    aqi = int(round(aqi))
+
+    category = aqi_category(aqi)
+
+    return aqi, category, dominant_pollutant, sub_indices
 
 
 def compute_aqi_for_record(record: dict) -> dict:

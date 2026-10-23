@@ -8,6 +8,9 @@ from bson import ObjectId
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
 from app.database import db
+from app.api.auth import get_optional_user
+from app.api.guards import require_dataset
+from app.services.dashboard_queries import inclusive_end
 
 router = APIRouter(prefix="/api/export", tags=["export"])
 
@@ -33,7 +36,9 @@ async def export_aqi_csv(
     start_date: Optional[datetime] = None,
     end_date: Optional[datetime] = None,
     database: AsyncIOMotorDatabase = Depends(get_database),
+    user=Depends(get_optional_user),
 ):
+    await require_dataset(database, dataset_id, "air_quality", user=user)
     query = {"dataset_id": dataset_id}
     if location:
         query["location"] = location
@@ -42,7 +47,7 @@ async def export_aqi_csv(
         if start_date:
             query["timestamp"]["$gte"] = start_date
         if end_date:
-            query["timestamp"]["$lte"] = end_date
+            query["timestamp"]["$lte"] = inclusive_end(end_date)
     
     cursor = database.air_quality.find(query).sort("timestamp", 1)
     rows = await cursor.to_list(length=None)
@@ -88,7 +93,9 @@ async def export_anomalies_csv(
     parameter: Optional[str] = None,
     only_anomalies: bool = True,
     database: AsyncIOMotorDatabase = Depends(get_database),
+    user=Depends(get_optional_user),
 ):
+    await require_dataset(database, dataset_id, user=user)
     query = {"dataset_id": dataset_id}
     if location:
         query["location"] = location
@@ -131,7 +138,9 @@ async def export_forecasts_csv(
     location: Optional[str] = None,
     parameter: Optional[str] = None,
     database: AsyncIOMotorDatabase = Depends(get_database),
+    user=Depends(get_optional_user),
 ):
+    await require_dataset(database, dataset_id, user=user)
     query = {"dataset_id": dataset_id}
     if location:
         query["location"] = location
@@ -182,7 +191,9 @@ async def export_raw_csv(
     dataset_id: str,
     location: Optional[str] = None,
     database: AsyncIOMotorDatabase = Depends(get_database),
+    user=Depends(get_optional_user),
 ):
+    await require_dataset(database, dataset_id, "air_quality", user=user)
     query = {"dataset_id": dataset_id}
     if location:
         query["location"] = location
@@ -216,4 +227,70 @@ async def export_raw_csv(
         io.BytesIO(output.getvalue().encode()),
         media_type="text/csv",
         headers={"Content-Disposition": f"attachment; filename=raw_{dataset_id}.csv"}
+    )
+
+
+@router.get("/dataset/{dataset_id}")
+async def export_dataset_csv(
+    dataset_id: str,
+    location: Optional[str] = None,
+    start_date: Optional[datetime] = None,
+    end_date: Optional[datetime] = None,
+    database: AsyncIOMotorDatabase = Depends(get_database),
+    user=Depends(get_optional_user),
+):
+    dataset = await require_dataset(database, dataset_id, user=user)
+    
+    dataset_type = dataset.get("dataset_type", "air_quality")
+    
+    query = {"dataset_id": dataset_id}
+    if location:
+        query["location"] = location
+    if start_date or end_date:
+        query["timestamp"] = {}
+        if start_date:
+            query["timestamp"]["$gte"] = start_date
+        if end_date:
+            query["timestamp"]["$lte"] = inclusive_end(end_date)
+    
+    if dataset_type == "water_quality":
+        cursor = database.water_quality.find(query).sort("timestamp", 1)
+        rows = await cursor.to_list(length=None)
+        
+        if not rows:
+            raise HTTPException(status_code=404, detail="No data found for export")
+        
+        fieldnames = [
+            "timestamp", "location", "ph", "turbidity", "tds", "hardness",
+            "chlorides", "sulfates", "nitrates", "fluorides", "iron",
+            "manganese", "do", "bod", "wqi", "wqi_category"
+        ]
+        csv_rows = [{k: r.get(k) for k in fieldnames} for r in rows]
+    else:
+        cursor = database.air_quality.find(query).sort("timestamp", 1)
+        rows = await cursor.to_list(length=None)
+        
+        if not rows:
+            raise HTTPException(status_code=404, detail="No data found for export")
+        
+        fieldnames = [
+            "timestamp", "location", "aqi", "aqi_category", "dominant_pollutant",
+            "temperature", "temp_min", "temp_max", "precipitation",
+            "pm25", "pm10", "no2", "so2", "co", "o3"
+        ]
+        csv_rows = []
+        for r in rows:
+            pv = r.get("pollutant_values", {})
+            row = {k: r.get(k) for k in ("timestamp", "location", "aqi", "aqi_category",
+                                         "dominant_pollutant", "temperature", "temp_min",
+                                         "temp_max", "precipitation")}
+            row.update({p: pv.get(p) for p in ("pm25", "pm10", "no2", "so2", "co", "o3")})
+            csv_rows.append(row)
+    
+    output = _generate_csv(csv_rows, fieldnames)
+    
+    return StreamingResponse(
+        io.BytesIO(output.getvalue().encode()),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={dataset_type}_{dataset_id}.csv"}
     )
