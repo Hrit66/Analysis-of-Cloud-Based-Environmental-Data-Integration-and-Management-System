@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { SquircleCard } from './squircle';
@@ -21,8 +21,7 @@ export const Carousel3D = ({ items = [] }) => {
     <div className="relative w-full max-w-5xl mx-auto flex flex-col items-center justify-center py-20 px-4">
       {/* 3D Stack Area */}
       <div className="relative w-full h-[400px] flex items-center justify-center perspective-[1000px] transform-style-3d">
-        <AnimatePresence initial={false}>
-          {items.map((item, index) => {
+        {items.map((item, index) => {
             // Calculate distance from active index, wrapping around
             const offset = (index - activeIndex + items.length) % items.length;
             const signedOffset = offset > Math.floor(items.length / 2) ? offset - items.length : offset;
@@ -36,20 +35,17 @@ export const Carousel3D = ({ items = [] }) => {
             // Optionally, add a slight rotateY for a cover flow effect
             const rotateY = signedOffset * -15;
 
-            // Don't render items that are too far away to improve performance
-            if (Math.abs(signedOffset) > 2) return null;
-
             return (
               <motion.div
                 key={item.id}
-                initial={{ opacity: 0, scale: 0.8, x: x + (signedOffset > 0 ? 100 : -100) }}
-                animate={{ opacity, scale, x, zIndex, rotateY }}
-                transition={{ type: "spring", stiffness: 260, damping: 20 }}
+                animate={{ opacity, scale, x, rotateY }}
+                transition={{ duration: 0.38, ease: [0.32, 0.72, 0, 1] }}
                 className={cn(
-                  "absolute top-1/2 left-1/2 -mt-[160px] -ml-[140px] w-[280px] h-[320px] transition-all duration-300",
+                  "absolute top-1/2 left-1/2 -mt-[160px] -ml-[140px] w-[280px] h-[320px] will-change-transform",
                   isActive ? "cursor-pointer" : "pointer-events-none"
                 )}
-                style={{ transformOrigin: "center center" }}
+                style={{ transformOrigin: "center center", zIndex }}
+                aria-hidden={!isActive}
               >
                 {/* The glass card */}
                 <SquircleCard
@@ -82,8 +78,7 @@ export const Carousel3D = ({ items = [] }) => {
                 </SquircleCard>
               </motion.div>
             );
-          })}
-        </AnimatePresence>
+        })}
       </div>
 
       {/* Controls & Pagination */}

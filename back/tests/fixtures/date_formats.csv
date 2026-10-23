@@ -1,0 +1,5 @@
+timestamp,location,pm25
+2026-10-11,DateA,10
+11-10-2026,DateB,11
+10/11/2026,DateC,12
+11 Oct 2026 14:00,DateD,13

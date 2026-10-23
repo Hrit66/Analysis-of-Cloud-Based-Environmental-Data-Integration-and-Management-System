@@ -13,7 +13,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     g++ \
     libpq-dev \
+    libmagic1 \
     ca-certificates \
+    fonts-dejavu-core \
     && update-ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
@@ -27,4 +29,4 @@ RUN mkdir -p uploads models
 
 EXPOSE 8000
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--forwarded-allow-ips=*"]

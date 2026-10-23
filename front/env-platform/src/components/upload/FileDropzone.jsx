@@ -1,27 +1,27 @@
 import React, { useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { UploadCloud, File, AlertCircle } from 'lucide-react';
+import { UploadCloud, AlertCircle } from 'lucide-react';
 
-const FileDropzone = ({ onDrop, accept = {
+const FileDropzone = ({ onDrop, multiple = false, hint, accept = {
   'text/csv': ['.csv'],
   'application/json': ['.json'],
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
   'application/vnd.ms-excel': ['.xls']
-}, maxSize = 20971520 }) => { // 20MB
+}, maxSize = 50 * 1024 * 1024 }) => { // 50MB fallback
   const handleDrop = useCallback((acceptedFiles, fileRejections) => {
     if (acceptedFiles.length > 0) {
-      onDrop(acceptedFiles[0]);
+      onDrop(multiple ? acceptedFiles : acceptedFiles[0]);
     }
     if (fileRejections.length > 0) {
       alert(fileRejections[0].errors[0].message);
     }
-  }, [onDrop]);
+  }, [onDrop, multiple]);
 
   const { getRootProps, getInputProps, isDragActive, isDragReject } = useDropzone({
     onDrop: handleDrop,
     accept,
     maxSize,
-    multiple: false
+    multiple
   });
 
   return (
@@ -43,9 +43,11 @@ const FileDropzone = ({ onDrop, accept = {
       <p className="text-lg font-medium text-slate-700 mb-1">
         {isDragActive ? "Drop the file here..." : "Drag & drop a file here, or click to select"}
       </p>
-      <p className="text-sm text-slate-500">
-        Supports .csv, .json, .xlsx up to 20MB
-      </p>
+      {hint !== null && (
+        <p className="text-sm text-slate-500">
+          {hint || (multiple ? 'Select the rain, tmax and tmin files (.csv)' : 'Supports .csv, .json, .xlsx')}
+        </p>
+      )}
     </div>
   );
 };

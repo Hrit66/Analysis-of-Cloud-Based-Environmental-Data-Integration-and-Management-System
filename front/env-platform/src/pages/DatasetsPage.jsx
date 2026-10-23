@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import DatasetTable from '../components/dataset/DatasetTable';
-import { fetchDatasets, deleteDataset } from '../lib/api';
+import SpeederLoader from '../components/common/SpeederLoader';
+import { fetchDatasets, deleteDataset, renameDataset } from '../lib/api';
 
 const DatasetsPage = () => {
   const [datasets, setDatasets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
 
   const loadDatasets = async () => {
     setLoading(true);
@@ -24,28 +26,46 @@ const DatasetsPage = () => {
   }, []);
 
   const handleDelete = async (id) => {
+    if (deletingId) return;
     if (!window.confirm('Delete this dataset and all its analytics?')) return;
+    setDeletingId(id);
     try {
       await deleteDataset(id);
+      setDatasets((previous) => previous.filter((dataset) => dataset.id !== id));
+    } catch (err) {
+      // The server may have deleted it despite a lost/aborted response.
+      let deleted = false;
+      try {
+        const data = await fetchDatasets();
+        setDatasets(data);
+        deleted = !data.some((dataset) => dataset.id === id);
+      } catch {
+        // Keep the list as-is if the verification request also failed.
+      }
+      if (!deleted) alert('Failed to delete: ' + err.message);
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handleRename = async (id, displayName) => {
+    try {
+      await renameDataset(id, displayName);
       loadDatasets();
     } catch (err) {
-      alert('Failed to delete: ' + err.message);
+      alert('Failed to rename: ' + err.message);
     }
   };
 
   if (loading) {
     return (
-      <div className="space-y-6 animate-pulse">
-        <div className="h-8 bg-slate-200 rounded w-64"></div>
-        <div className="glass-panel rounded-2xl overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead><tr><th className="px-6 py-4 h-12 bg-slate-200"></th></tr></thead>
-              <tbody>
-                {[1,2,3,4].map(i => <tr key={i}><td className="px-6 py-4 h-12 bg-slate-200"></td></tr>)}
-              </tbody>
-            </table>
-          </div>
+      <div className="space-y-6">
+        <div className="space-y-2 animate-pulse">
+          <div className="h-8 bg-slate-200 rounded w-40"></div>
+          <div className="h-4 bg-slate-200 rounded w-72"></div>
+        </div>
+        <div className="glass-panel relative h-80 overflow-hidden rounded-2xl">
+          <SpeederLoader label="Loading datasets" />
         </div>
       </div>
     );
@@ -68,7 +88,12 @@ const DatasetsPage = () => {
       </div>
       
       <div className="glass-panel rounded-2xl overflow-hidden animate-fade-in-up">
-        <DatasetTable datasets={datasets} onDelete={handleDelete} />
+        <DatasetTable
+          datasets={datasets}
+          onDelete={handleDelete}
+          onRename={handleRename}
+          deletingId={deletingId}
+        />
       </div>
     </div>
   );

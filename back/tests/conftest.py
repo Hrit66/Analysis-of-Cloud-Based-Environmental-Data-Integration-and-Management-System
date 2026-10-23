@@ -1,3 +1,7 @@
+import os
+
+os.environ.setdefault("ALLOW_ANONYMOUS_UPLOAD", "true")
+
 import pytest
 import asyncio
 from typing import AsyncGenerator

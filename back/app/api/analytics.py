@@ -1,11 +1,22 @@
 from datetime import datetime, timedelta
 from typing import List, Optional
+import pandas as pd
 from fastapi import APIRouter, Query, HTTPException, Depends
 from bson import ObjectId
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
 from app.database import db
+from app.api.auth import get_optional_user
+from app.api.guards import require_dataset
 from app.models.analytics import AQIResult, AnomalyResult, ForecastResult
+from app.services.dashboard_queries import (
+    anomaly_statistics,
+    anomaly_totals,
+    inclusive_end,
+    station_statistics,
+)
+from app.services.forecaster import rain_outlook_from_frame
+from app.services.trend_analysis import analyze_trend
 
 router = APIRouter(prefix="/api/analytics", tags=["analytics"])
 
@@ -23,7 +34,9 @@ async def get_aqi_results(
     limit: int = 1000,
     skip: int = 0,
     database: AsyncIOMotorDatabase = Depends(get_database),
+    user=Depends(get_optional_user),
 ):
+    await require_dataset(database, dataset_id, "air_quality", user=user)
     query = {"dataset_id": dataset_id}
     
     if location:
@@ -34,7 +47,7 @@ async def get_aqi_results(
         if start_date:
             query["timestamp"]["$gte"] = start_date
         if end_date:
-            query["timestamp"]["$lte"] = end_date
+            query["timestamp"]["$lte"] = inclusive_end(end_date)
     
     total = await database.air_quality.count_documents(query)
     cursor = database.air_quality.find(query).sort("timestamp", -1).skip(skip).limit(limit)
@@ -57,42 +70,10 @@ async def get_aqi_summary(
     dataset_id: str,
     location: Optional[str] = None,
     database: AsyncIOMotorDatabase = Depends(get_database),
+    user=Depends(get_optional_user),
 ):
-    match_stage = {"dataset_id": dataset_id}
-    if location:
-        match_stage["location"] = location
-    
-    pipeline = [
-        {"$match": match_stage},
-        {"$group": {
-            "_id": "$location",
-            "avg_aqi": {"$avg": "$aqi"},
-            "max_aqi": {"$max": "$aqi"},
-            "min_aqi": {"$min": "$aqi"},
-            "count": {"$sum": 1},
-            "categories": {"$push": "$aqi_category"},
-            "dominant_pollutants": {"$push": "$dominant_pollutant"},
-        }},
-    ]
-    
-    results = await database.air_quality.aggregate(pipeline).to_list(length=None)
-    
-    for r in results:
-        r["location"] = r.pop("_id")
-        cat_counts = {}
-        for cat in r["categories"]:
-            cat_counts[cat] = cat_counts.get(cat, 0) + 1
-        r["category_distribution"] = cat_counts
-        
-        poll_counts = {}
-        for poll in r["dominant_pollutants"]:
-            if poll:
-                poll_counts[poll] = poll_counts.get(poll, 0) + 1
-        r["dominant_pollutant_distribution"] = poll_counts
-        del r["categories"]
-        del r["dominant_pollutants"]
-    
-    return results
+    await require_dataset(database, dataset_id, "air_quality", user=user)
+    return await station_statistics(database, dataset_id, "air_quality", location=location)
 
 
 @router.get("/anomalies/{dataset_id}")
@@ -101,10 +82,14 @@ async def get_anomalies(
     location: Optional[str] = None,
     parameter: Optional[str] = None,
     only_anomalies: bool = True,
+    start_date: Optional[datetime] = None,
+    end_date: Optional[datetime] = None,
     limit: int = 1000,
     skip: int = 0,
     database: AsyncIOMotorDatabase = Depends(get_database),
+    user=Depends(get_optional_user),
 ):
+    await require_dataset(database, dataset_id, user=user)
     query = {"dataset_id": dataset_id}
     
     if location:
@@ -113,6 +98,12 @@ async def get_anomalies(
         query["parameter"] = parameter
     if only_anomalies:
         query["is_anomaly"] = True
+    if start_date or end_date:
+        query["timestamp"] = {}
+        if start_date:
+            query["timestamp"]["$gte"] = start_date
+        if end_date:
+            query["timestamp"]["$lte"] = inclusive_end(end_date)
     
     total = await database.anomalies.count_documents(query)
     cursor = database.anomalies.find(query).sort("timestamp", -1).skip(skip).limit(limit)
@@ -131,30 +122,18 @@ async def get_anomalies(
 
 
 @router.get("/anomalies/{dataset_id}/summary")
-async def get_anomaly_summary(dataset_id: str, database: AsyncIOMotorDatabase = Depends(get_database)):
-    pipeline = [
-        {"$match": {"dataset_id": dataset_id}},
-        {"$group": {
-            "_id": {"location": "$location", "parameter": "$parameter"},
-            "total": {"$sum": 1},
-            "anomalies": {"$sum": {"$cond": ["$is_anomaly", 1, 0]}},
-        }},
-    ]
-    
-    results = await database.anomalies.aggregate(pipeline).to_list(length=None)
-    
-    summary = {}
-    for r in results:
-        key = f"{r['_id']['location']}_{r['_id']['parameter']}"
-        summary[key] = {
-            "location": r["_id"]["location"],
-            "parameter": r["_id"]["parameter"],
-            "total": r["total"],
-            "anomalies": r["anomalies"],
-            "anomaly_rate": round(r["anomalies"] / r["total"] * 100, 2) if r["total"] > 0 else 0,
-        }
-    
-    return {"dataset_id": dataset_id, "summary": summary}
+async def get_anomaly_summary(
+    dataset_id: str,
+    location: Optional[str] = None,
+    start_date: Optional[datetime] = None,
+    end_date: Optional[datetime] = None,
+    database: AsyncIOMotorDatabase = Depends(get_database),
+    user=Depends(get_optional_user),
+):
+    await require_dataset(database, dataset_id, user=user)
+    summary = await anomaly_statistics(database, dataset_id, start_date, end_date, location)
+    totals = await anomaly_totals(database, dataset_id, start_date, end_date, location)
+    return {"dataset_id": dataset_id, "summary": summary, "totals": totals}
 
 
 @router.get("/forecasts/{dataset_id}", response_model=List[ForecastResult])
@@ -163,7 +142,9 @@ async def get_forecasts(
     location: Optional[str] = None,
     parameter: Optional[str] = None,
     database: AsyncIOMotorDatabase = Depends(get_database),
+    user=Depends(get_optional_user),
 ):
+    await require_dataset(database, dataset_id, user=user)
     query = {"dataset_id": dataset_id}
     if location:
         query["location"] = location
@@ -178,14 +159,15 @@ async def get_forecasts(
     
     return results
 
-
 @router.get("/forecasts/{dataset_id}/latest")
 async def get_latest_forecast(
     dataset_id: str,
     location: str,
     parameter: str,
     database: AsyncIOMotorDatabase = Depends(get_database),
+    user=Depends(get_optional_user),
 ):
+    await require_dataset(database, dataset_id, user=user)
     forecast = await database.forecasts.find_one(
         {"dataset_id": dataset_id, "location": location, "parameter": parameter},
         sort=[("created_at", -1)]
@@ -205,7 +187,9 @@ async def get_trends(
     parameter: str,
     days: int = 30,
     database: AsyncIOMotorDatabase = Depends(get_database),
+    user=Depends(get_optional_user),
 ):
+    await require_dataset(database, dataset_id, user=user)
     start_date = datetime.utcnow() - timedelta(days=days)
     
     pipeline = [
@@ -228,4 +212,233 @@ async def get_trends(
         "location": location,
         "parameter": parameter,
         "data": [{"timestamp": r["timestamp"], "value": r["value"]} for r in results if r.get("value") is not None],
+    }
+
+
+@router.get("/temperature/{dataset_id}")
+async def get_temperature_results(
+    dataset_id: str,
+    location: Optional[str] = None,
+    start_date: Optional[datetime] = None,
+    end_date: Optional[datetime] = None,
+    limit: int = 1000,
+    database: AsyncIOMotorDatabase = Depends(get_database),
+    user=Depends(get_optional_user),
+):
+    await require_dataset(database, dataset_id, "temperature", user=user)
+    query = {"dataset_id": dataset_id}
+    
+    if location:
+        query["location"] = location
+    
+    if start_date or end_date:
+        query["timestamp"] = {}
+        if start_date:
+            query["timestamp"]["$gte"] = start_date
+        if end_date:
+            query["timestamp"]["$lte"] = inclusive_end(end_date)
+    
+    cursor = database.air_quality.find(query).sort("timestamp", -1).limit(limit)
+    results = await cursor.to_list(length=limit)
+    
+    for r in results:
+        r["id"] = str(r.pop("_id"))
+    
+    return results
+
+
+@router.get("/temperature/{dataset_id}/summary")
+async def get_temperature_summary(
+    dataset_id: str,
+    location: Optional[str] = None,
+    database: AsyncIOMotorDatabase = Depends(get_database),
+    user=Depends(get_optional_user),
+):
+    await require_dataset(database, dataset_id, "temperature", user=user)
+    return await station_statistics(database, dataset_id, "temperature", location=location)
+
+
+@router.get("/date-range/{dataset_id}")
+async def get_dataset_date_range(
+    dataset_id: str,
+    database: AsyncIOMotorDatabase = Depends(get_database),
+    user=Depends(get_optional_user),
+):
+    dataset = await require_dataset(database, dataset_id, user=user)
+    
+    collection = database.water_quality if dataset.get("dataset_type") == "water_quality" else database.air_quality
+    
+    pipeline = [
+        {"$match": {"dataset_id": dataset_id}},
+        {"$group": {"_id": None, "first": {"$min": "$timestamp"}, "latest": {"$max": "$timestamp"}}},
+    ]
+    results = await collection.aggregate(pipeline).to_list(length=1)
+    
+    if not results:
+        return {"first": None, "latest": None}
+    
+    return {"first": results[0]["first"], "latest": results[0]["latest"]}
+
+
+@router.get("/rainfall/{dataset_id}")
+async def get_rainfall_results(
+    dataset_id: str,
+    location: Optional[str] = None,
+    start_date: Optional[datetime] = None,
+    end_date: Optional[datetime] = None,
+    limit: int = 1000,
+    database: AsyncIOMotorDatabase = Depends(get_database),
+    user=Depends(get_optional_user),
+):
+    await require_dataset(database, dataset_id, "rainfall", user=user)
+    query = {"dataset_id": dataset_id}
+    
+    if location:
+        query["location"] = location
+    
+    if start_date or end_date:
+        query["timestamp"] = {}
+        if start_date:
+            query["timestamp"]["$gte"] = start_date
+        if end_date:
+            query["timestamp"]["$lte"] = inclusive_end(end_date)
+    
+    cursor = database.air_quality.find(query).sort("timestamp", -1).limit(limit)
+    results = await cursor.to_list(length=limit)
+    
+    for r in results:
+        r["id"] = str(r.pop("_id"))
+    
+    return results
+
+
+@router.get("/rainfall/{dataset_id}/summary")
+async def get_rainfall_summary(
+    dataset_id: str,
+    location: Optional[str] = None,
+    database: AsyncIOMotorDatabase = Depends(get_database),
+    user=Depends(get_optional_user),
+):
+    await require_dataset(database, dataset_id, "rainfall", user=user)
+    return await station_statistics(database, dataset_id, "rainfall", location=location)
+
+
+@router.get("/rainfall/{dataset_id}/outlook")
+async def get_rainfall_outlook(
+    dataset_id: str,
+    location: Optional[str] = None,
+    database: AsyncIOMotorDatabase = Depends(get_database),
+    user=Depends(get_optional_user),
+):
+    await require_dataset(database, dataset_id, "rainfall", user=user)
+    query = {"dataset_id": dataset_id}
+    if location:
+        query["location"] = location
+
+    docs = await database.air_quality.find(query).sort("timestamp", 1).to_list(length=None)
+    if not docs:
+        raise HTTPException(status_code=404, detail="No rainfall observations found")
+
+    resolved_location = location or docs[0].get("location")
+    frame = pd.DataFrame([
+        {
+            "timestamp": doc.get("timestamp"),
+            "location": doc.get("location"),
+            "precipitation": doc.get("precipitation"),
+        }
+        for doc in docs
+    ])
+    forecast_query = {
+        "dataset_id": dataset_id,
+        "parameter": "precipitation",
+        "location": resolved_location,
+    }
+    forecast = await database.forecasts.find_one(
+        forecast_query, sort=[("created_at", -1)]
+    )
+    return rain_outlook_from_frame(
+        frame,
+        resolved_location,
+        model_metrics=(forecast or {}).get("metrics"),
+    )
+
+
+@router.get("/wqi/{dataset_id}")
+async def get_wqi_results(
+    dataset_id: str,
+    location: Optional[str] = None,
+    start_date: Optional[datetime] = None,
+    end_date: Optional[datetime] = None,
+    limit: int = 1000,
+    database: AsyncIOMotorDatabase = Depends(get_database),
+    user=Depends(get_optional_user),
+):
+    await require_dataset(database, dataset_id, "water_quality", user=user)
+    query = {"dataset_id": dataset_id}
+    
+    if location:
+        query["location"] = location
+    
+    if start_date or end_date:
+        query["timestamp"] = {}
+        if start_date:
+            query["timestamp"]["$gte"] = start_date
+        if end_date:
+            query["timestamp"]["$lte"] = inclusive_end(end_date)
+    
+    cursor = database.water_quality.find(query).sort("timestamp", -1).limit(limit)
+    results = await cursor.to_list(length=limit)
+    
+    for r in results:
+        r["id"] = str(r.pop("_id"))
+    
+    return results
+
+
+@router.get("/wqi/{dataset_id}/summary")
+async def get_wqi_summary(
+    dataset_id: str,
+    location: Optional[str] = None,
+    start_date: Optional[datetime] = None,
+    end_date: Optional[datetime] = None,
+    database: AsyncIOMotorDatabase = Depends(get_database),
+    user=Depends(get_optional_user),
+):
+    await require_dataset(database, dataset_id, "water_quality", user=user)
+    return await station_statistics(
+        database, dataset_id, "water_quality", start_date, end_date, location
+    )
+
+
+@router.get("/wqi/{dataset_id}/trend")
+async def get_wqi_trend(
+    dataset_id: str,
+    location: str,
+    start_date: Optional[datetime] = None,
+    end_date: Optional[datetime] = None,
+    database: AsyncIOMotorDatabase = Depends(get_database),
+    user=Depends(get_optional_user),
+):
+    await require_dataset(database, dataset_id, "water_quality", user=user)
+    query = {"dataset_id": dataset_id, "location": location}
+    if start_date or end_date:
+        query["timestamp"] = {}
+        if start_date:
+            query["timestamp"]["$gte"] = start_date
+        if end_date:
+            query["timestamp"]["$lte"] = inclusive_end(end_date)
+
+    cursor = database.water_quality.find(
+        query, {"timestamp": 1, "wqi": 1}
+    ).sort("timestamp", 1)
+    docs = await cursor.to_list(length=None)
+    result = analyze_trend(
+        [doc.get("timestamp") for doc in docs],
+        [doc.get("wqi") for doc in docs],
+    )
+    return {
+        "dataset_id": dataset_id,
+        "location": location,
+        "parameter": "wqi",
+        **result,
     }

@@ -1,0 +1,3 @@
+Date,city,PM2.5 (µg/m³),pm_10,NO2,SO2,CO,O3,Temperature (°C),Precipitation (mm)
+2026-10-01,Bengaluru,45,80,30,10,1.2,40,28.5,0
+2026-10-02,Bengaluru,52,91,33,11,1.4,44,29.1,2.5

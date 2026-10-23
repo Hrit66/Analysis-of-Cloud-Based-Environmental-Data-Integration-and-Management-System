@@ -1,0 +1,4 @@
+[
+  {"timestamp": "2026-10-01 00:00:00", "location": "JSONCity", "pm25": 18, "pm10": 30},
+  {"timestamp": "2026-10-01 01:00:00", "location": "JSONCity", "pm25": 21, "pm10": 34}
+]

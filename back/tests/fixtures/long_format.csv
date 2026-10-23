@@ -1,0 +1,10 @@
+location,datetime,parameter,value,units
+OpenAQStation,2026-10-11T00:00:00Z,pm25,12,ug/m3
+OpenAQStation,2026-10-11T00:00:00Z,pm10,24,ug/m3
+OpenAQStation,2026-10-11T00:00:00Z,no2,8,ug/m3
+OpenAQStation,2026-10-11T00:00:00Z,o3,40,ug/m3
+OpenAQStation,2026-10-11T00:00:00Z,pressure,1013,hPa
+OpenAQStation,2026-10-11T01:00:00Z,pm25,13,ug/m3
+OpenAQStation,2026-10-11T01:00:00Z,pm10,26,ug/m3
+OpenAQStation,2026-10-11T01:00:00Z,no2,9,ug/m3
+OpenAQStation,2026-10-11T01:00:00Z,o3,42,ug/m3

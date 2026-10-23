@@ -1,12 +1,14 @@
-import React, { useRef } from 'react';
+import React from 'react';
 import { Cloud, ArrowRight, Activity, Database, CloudRain, Wind, Droplets, Thermometer, AlertTriangle, FileText } from 'lucide-react';
 import { motion, useScroll, useTransform } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { LiquidButton } from '../components/ui/liquid-glass-button';
 import { SquircleCard } from '../components/ui/squircle';
 import { Carousel3D } from '../components/ui/carousel-3d';
+import { useAuth } from '../context/useAuth';
+import AdminHome from './AdminHome';
 
-const Home = () => {
+const UserHome = () => {
   const navigate = useNavigate();
 
   // Cloud configuration for animation
@@ -53,7 +55,7 @@ const Home = () => {
       id: 'rain',
       label: 'Weather',
       title: 'Rainfall Forecast',
-      description: 'Advanced precipitation forecasting and drought indicator mapping.',
+      description: 'Probability-only rain outlook, wet-day seasonality, and drought indicator mapping.',
       icon: CloudRain
     },
     {
@@ -157,6 +159,11 @@ const Home = () => {
       </div>
     </div>
   );
+};
+
+const Home = () => {
+  const { user } = useAuth();
+  return user?.platform_role === 'platform_admin' ? <AdminHome /> : <UserHome />;
 };
 
 export default Home;

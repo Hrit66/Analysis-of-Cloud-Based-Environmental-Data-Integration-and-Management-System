@@ -15,6 +15,12 @@ class AirQualityBase(BaseModel):
     so2: Optional[float] = None
     co: Optional[float] = None
     o3: Optional[float] = None
+    us_aqi_max: Optional[float] = None
+    india_aqi: Optional[float] = None
+    temperature: Optional[float] = None
+    temp_min: Optional[float] = None
+    temp_max: Optional[float] = None
+    precipitation: Optional[float] = None
     dataset_id: str
     dataset_type: str = "air_quality"
 
