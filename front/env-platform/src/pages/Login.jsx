@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/useAuth';
-import { Database, Mail, Lock, ShieldCheck } from 'lucide-react';
+import { Mail, Lock, ShieldCheck } from 'lucide-react';
+import BrandLogo from '../components/common/BrandLogo';
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -73,7 +74,7 @@ const Login = () => {
     <div className="min-h-screen flex flex-col justify-center py-12 sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-md animate-fade-in-up">
         <div className="flex justify-center">
-          <Database className="w-12 h-12 text-blue-600 drop-shadow-md" />
+          <BrandLogo />
         </div>
         <h2 className="mt-6 text-center text-3xl font-extrabold text-slate-900">
           {mfaMode ? 'Verify your sign-in' : 'Sign in to your account'}

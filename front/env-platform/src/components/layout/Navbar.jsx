@@ -8,6 +8,7 @@ import {
   ChevronDown, KeyRound, Bell, BellOff,
 } from 'lucide-react';
 import NotificationBell from '../ui/NotificationBell';
+import BrandLogo from '../common/BrandLogo';
 
 const NAV_ITEMS = [
   { key: 'home', name: 'Home', path: '/', icon: Home, color: 'text-indigo-500' },
@@ -72,9 +73,9 @@ const Navbar = () => {
   return (
     <nav className="glass-panel mx-6 mt-4 mb-2 rounded-2xl px-6 py-3 flex items-center justify-between z-20 sticky top-4">
       <div className="flex items-center gap-6 overflow-hidden">
-        <h1 className="text-xl font-bold text-slate-800 flex items-center gap-2 shrink-0">
-          <Database className="w-6 h-6 text-blue-600 drop-shadow-md" />
-          <span className="hidden xl:inline">EnvPlatform</span>
+        <h1 aria-label="EnvPlatform" className="text-xl font-bold text-slate-800 flex items-center gap-2 shrink-0">
+          <BrandLogo alt="" className="h-9 w-9" />
+          <span aria-hidden="true" className="hidden xl:inline">EnvPlatform</span>
         </h1>
 
         <div className="flex-1 overflow-x-auto hide-scrollbar pl-2 py-1">

@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { API_BASE } from '../lib/api';
-import { Building2, Database, Mail, Phone } from 'lucide-react';
+import { Building2, Mail, Phone } from 'lucide-react';
+import BrandLogo from '../components/common/BrandLogo';
 
 const TYPES = [
   { value: 'university', label: 'University or research institute' },
@@ -54,7 +55,7 @@ const OrganizationApply = () => {
     <div className="min-h-screen flex flex-col justify-center py-12 sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-2xl">
         <div className="flex justify-center">
-          <Database className="w-12 h-12 text-blue-600 drop-shadow-md" />
+          <BrandLogo />
         </div>
         <div className="mt-8 glass-panel py-8 px-6 sm:rounded-2xl">
           <div className="flex items-center justify-center gap-2">

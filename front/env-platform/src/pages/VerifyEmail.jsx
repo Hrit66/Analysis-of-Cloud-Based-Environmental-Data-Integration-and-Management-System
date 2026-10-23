@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/useAuth';
-import { Database, Mail, MailCheck } from 'lucide-react';
+import { Mail, MailCheck } from 'lucide-react';
+import BrandLogo from '../components/common/BrandLogo';
 
 const VerifyEmail = () => {
   const [params] = useSearchParams();
@@ -46,7 +47,7 @@ const VerifyEmail = () => {
     <div className="min-h-screen flex flex-col justify-center py-12 sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <div className="flex justify-center">
-          <Database className="w-12 h-12 text-blue-600 drop-shadow-md" />
+          <BrandLogo />
         </div>
         <div className="mt-8 glass-panel py-8 px-6 sm:rounded-2xl text-center space-y-4">
           <MailCheck className="w-10 h-10 text-blue-600 mx-auto" />

@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/useAuth';
-import { Database, Lock, ShieldCheck } from 'lucide-react';
+import { Lock, ShieldCheck } from 'lucide-react';
+import BrandLogo from '../components/common/BrandLogo';
 
 const ChangePassword = () => {
   const { changePassword, user } = useAuth();
@@ -32,7 +33,7 @@ const ChangePassword = () => {
     <div className="min-h-screen flex flex-col justify-center py-12 sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <div className="flex justify-center">
-          <Database className="w-12 h-12 text-blue-600 drop-shadow-md" />
+          <BrandLogo />
         </div>
         <div className="mt-8 glass-panel py-8 px-6 sm:rounded-2xl">
           <div className="flex items-center justify-center gap-2 text-slate-900">
