@@ -24,6 +24,30 @@
     @apply bg-white/50 backdrop-blur-md border border-white/60 shadow-[0_4px_24px_rgba(0,0,0,0.04)] hover:shadow-[0_12px_40px_rgba(0,0,0,0.08)] hover:-translate-y-1 transition-all duration-300;
   }
 
+  .auth-page {
+    background-color: #dbeafe;
+    background-image:
+      radial-gradient(ellipse at 50% 40%, rgba(255, 255, 255, 0.58) 0%, rgba(255, 255, 255, 0.22) 42%, rgba(8, 47, 73, 0.22) 100%),
+      linear-gradient(180deg, rgba(240, 249, 255, 0.30) 0%, rgba(255, 255, 255, 0.06) 42%, rgba(8, 47, 73, 0.32) 100%),
+      url('./assets/bg.jpg');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-attachment: fixed;
+  }
+
+  .auth-page .glass-panel {
+    background-color: rgba(255, 255, 255, 0.78);
+    border-color: rgba(255, 255, 255, 0.7);
+    box-shadow: 0 24px 80px -28px rgba(8, 47, 73, 0.6);
+  }
+
+  @media (max-width: 767px) {
+    .auth-page {
+      background-attachment: scroll;
+    }
+  }
+
   .animate-fade-in {
     animation: fadeIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   }

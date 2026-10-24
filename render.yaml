@@ -1,0 +1,59 @@
+# Render Blueprint — deploys the FastAPI backend in back/ as a Docker web service.
+# Dashboard → New → Blueprint → pick this repo. Render reads this file.
+services:
+  - type: web
+    name: envplatform-api
+    runtime: docker
+    rootDir: back
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: free
+    region: singapore
+    branch: feature/back
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      # --- secrets: fill these in the Render dashboard (sync: false = never stored in git) ---
+      - key: MONGO_URI
+        sync: false
+      - key: FRONTEND_URL          # e.g. https://envplatform.vercel.app (used in e-mail links)
+        sync: false
+      - key: FRONTEND_ORIGINS      # same URL(s), comma separated (CORS allow-list)
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      # --- production defaults ---
+      - key: ENVIRONMENT
+        value: production
+      - key: DB_NAME
+        value: aqi_db
+      - key: JWT_ALGORITHM
+        value: HS256
+      - key: ACCESS_TOKEN_EXPIRE_MINUTES
+        value: "15"
+      - key: REFRESH_TOKEN_EXPIRE_DAYS
+        value: "7"
+      - key: COOKIE_SECURE
+        value: "true"
+      # "lax" is correct because Vercel proxies /api/* to this service (same-origin for the browser).
+      # If you instead call Render directly from the browser (VITE_API_URL), set this to "none".
+      - key: COOKIE_SAMESITE
+        value: lax
+      - key: TERMS_VERSION
+        value: "2026-10"
+      - key: PYTHONUNBUFFERED
+        value: "1"
+      # Optional e-mail (verification / invites). Leave empty to disable.
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USERNAME
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: SMTP_FROM
+        value: no-reply@envplatform.app
+      # Optional: comma-separated e-mails that get platform-admin rights
+      - key: PLATFORM_ADMIN_EMAILS
+        sync: false
