@@ -50,7 +50,7 @@ const VerifyOrganizationContact = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+    <div className="auth-page min-h-screen flex flex-col justify-center py-12 sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <div className="flex justify-center"><Building2 className="w-12 h-12 text-blue-600" /></div>
         <div className="mt-8 glass-panel py-8 px-6 sm:rounded-2xl text-center space-y-4">

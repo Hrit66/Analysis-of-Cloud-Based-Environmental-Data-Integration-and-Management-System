@@ -1,0 +1,35 @@
+html {
+  background: #030508;
+  scrollbar-width: none;
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
+body {
+  margin: 0;
+  background: #030508;
+  overscroll-behavior-y: none;
+  touch-action: pan-y;
+}
+
+#sequence {
+  position: fixed;
+  inset: 0;
+  display: block;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  pointer-events: none;
+}
+
+.scroll-track {
+  position: relative;
+  width: 1px;
+  height: 600vh;
+  pointer-events: none;
+}

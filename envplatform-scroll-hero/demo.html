@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Scroll animation · EnvPlatform</title>
+<link rel="stylesheet" href="src/components/ScrollHero.css">
+<style>
+  body { margin: 0; background: #06100f; font-family: system-ui, "Segoe UI", sans-serif; }
+  .after { min-height: 70vh; display: grid; place-content: center; gap: 1.2rem; padding: 2rem; color: #eaf7f6; }
+  .after h2 { margin: 0; font-size: clamp(1.8rem, 4vw, 3rem); letter-spacing: -.02em; }
+  .after a { justify-self: start; padding: .8rem 1.4rem; border-radius: 999px; background: #67e8f9; color: #04252b; font-weight: 600; text-decoration: none; }
+</style></head>
+<body>
+<section class="sh" id="hero" style="height:600vh" aria-label="How EnvPlatform works">
+  <div class="sh__stick">
+    <canvas id="cv" role="img" aria-label="Camera moving toward floating data panels in a rainy green city"></canvas>
+    <div class="sh__scrim"></div>
+    <div class="sh__hint" id="hint">Scroll to explore</div>
+    <div class="sh__bar"><i id="bar"></i></div>
+    <div class="sh__load" id="load">Loading 0%</div>
+  </div>
+</section>
+<section class="after"><h2>Bring your first dataset.</h2><a href="#">Open EnvPlatform</a></section>
+<script>
+const N = 158, FOCUS_X = 0.62;
+const src = (i) => `public/frames/frame-${String(i + 1).padStart(3, "0")}.webp`;
+const BEATS = [
+  { from: 0, to: 0.22, title: "Upload raw environmental data.", text: "CSV, Excel or JSON, with messy headers, mixed units and missing values." },
+  { from: 0.28, to: 0.5, title: "Cleaned, with every change listed.", text: "Duplicates, renamed columns and blanked values are counted in a data-quality report." },
+  { from: 0.56, to: 0.78, title: "Analysed against standard indices.", text: "AQI, WQI, rainfall and temperature trends, plus anomaly flags you can inspect." },
+  { from: 0.84, to: 1, title: "Forecast with an honest baseline.", text: "Every forecast is compared with persistence, and skipped when it cannot beat it." },
+];
+const $ = (id) => document.getElementById(id), clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+const wrap = $("hero"), cv = $("cv"), ctx = cv.getContext("2d"), stick = wrap.querySelector(".sh__stick");
+const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const els = BEATS.map((b) => { const d = document.createElement("div"); d.className = "sh__beat";
+  d.innerHTML = `<h2>${b.title}</h2><p>${b.text}</p>`; stick.insertBefore(d, $("hint")); return d; });
+const frames = new Array(N).fill(null);
+let cur = 0, target = 0, last = performance.now(), key = -1, done = 0;
+
+function size() { const d = Math.min(devicePixelRatio || 1, 2); cv.width = Math.round(cv.clientWidth * d); cv.height = Math.round(cv.clientHeight * d); key = -1; }
+function get(i) { for (let j = i; j >= 0; j--) if (frames[j]) return frames[j]; for (let j = i; j < N; j++) if (frames[j]) return frames[j]; return null; }
+function paint(img, a) { if (!img) return; const s = Math.max(cv.width / img.naturalWidth, cv.height / img.naturalHeight);
+  const w = img.naturalWidth * s, h = img.naturalHeight * s; ctx.globalAlpha = a; ctx.drawImage(img, (cv.width - w) * FOCUS_X, (cv.height - h) / 2, w, h); }
+function draw(p) { const i = Math.floor(p), f = p - i; paint(get(i), 1); if (f > 0.02 && i + 1 < N) paint(get(i + 1), f); ctx.globalAlpha = 1; }
+function onScroll() { const r = wrap.getBoundingClientRect(); target = clamp(-r.top / Math.max(1, r.height - innerHeight)) * (N - 1); }
+function tick(t) {
+  const dt = Math.min((t - last) / 1000, 0.05); last = t;
+  cur += (target - cur) * (reduce ? 1 : 1 - Math.exp(-dt * 9));
+  if (Math.abs(target - cur) < 0.001) cur = target;
+  const k = Math.round(cur * 100); if (k !== key) { key = k; draw(cur); }
+  const q = cur / (N - 1);
+  BEATS.forEach((b, n) => { const e = 0.04;
+    const o = (b.from <= 0 ? 1 : clamp((q - b.from) / e)) * (b.to >= 1 ? 1 : clamp((b.to - q) / e));
+    els[n].style.opacity = o; els[n].style.transform = `translateY(${(1 - o) * 14}px)`; });
+  $("bar").style.transform = `scaleY(${q})`; $("hint").style.opacity = 1 - clamp(q / 0.03);
+  requestAnimationFrame(tick);
+}
+const order = [], seen = new Set();
+[8, 4, 2, 1].forEach((st) => { for (let i = 0; i < N; i += st) if (!seen.has(i)) { seen.add(i); order.push(i); } });
+let next = 0;
+async function worker() {
+  while (next < order.length) {
+    const i = order[next++], img = new Image(); img.src = src(i);
+    try { await img.decode(); } catch { continue; }
+    frames[i] = img; key = -1; $("load").textContent = `Loading ${Math.round(++done / N * 100)}%`;
+  }
+}
+Promise.all([1, 2, 3, 4, 5, 6].map(worker)).then(() => $("load").remove());
+addEventListener("scroll", onScroll, { passive: true });
+addEventListener("resize", () => { size(); onScroll(); });
+size(); onScroll(); cur = target; requestAnimationFrame(tick);
+</script></body></html>

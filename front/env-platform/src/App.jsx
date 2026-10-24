@@ -1,6 +1,8 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import ProtectedRoute from './components/layout/ProtectedRoute';
+import { useAuth } from './context/useAuth';
+import Landing from './pages/Landing';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
 import Home from './pages/Home';
@@ -28,10 +30,20 @@ import AdminReviewPage from './pages/AdminReviewPage';
 import NotificationsPage from './pages/NotificationsPage';
 import NotificationPreferencesPage from './pages/NotificationPreferencesPage';
 
+// "/" is the public landing page for visitors and the protected Home for signed-in users.
+const RootRoute = () => {
+  const { token } = useAuth();
+  return token ? <ProtectedRoute /> : <Landing />;
+};
+
 function App() {
   return (
     <Router>
       <Routes>
+        <Route path="/" element={<RootRoute />}>
+          <Route index element={<Home />} />
+        </Route>
+
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
         <Route path="/verify-email" element={<VerifyEmail />} />
@@ -43,7 +55,6 @@ function App() {
         <Route path="/accept-invite" element={<AcceptInvite />} />
 
         <Route element={<ProtectedRoute />}>
-          <Route path="/" element={<Home />} />
           <Route path="/upload" element={<UploadPage />} />
           <Route path="/datasets" element={<DatasetsPage />} />
           <Route path="/aqi" element={<AQIDashboard />} />
